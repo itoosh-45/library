@@ -23,4 +23,4 @@ createServer(async (request, response) => {
     if (name === 'service-worker.js') body = Buffer.from(body.toString().replace("const build = '", `const build = '${generation}-`).replaceAll('/library/' + entry, '/library/' + variantEntry));
     response.writeHead(200, { 'Content-Type': types[extname(name)] ?? 'application/octet-stream', 'Cache-Control': 'no-store' }); response.end(body);
   } catch { response.writeHead(404); response.end(); }
-}).listen(4334, '127.0.0.1');
+}).listen(Number(process.env.PWA_TEST_PORT ?? 4334), '127.0.0.1');

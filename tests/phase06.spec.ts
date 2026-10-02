@@ -14,15 +14,15 @@ async function seed(page: Page) {
 test('T13 global live search, cumulative filters, series in every sort, original text and backup remain intact', async ({ page }) => {
   test.setTimeout(60000); const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto(''); await expect(page.getByRole('heading', { name: /כל הספרים/ })).toBeVisible(); const ids = await seed(page);
-  await expect(page.locator('.book-list li')).toHaveCount(24);
+  await expect(page.locator('.book-list li:not([hidden])')).toHaveCount(24);
   for (const [query, count] of [['תמר סוף', 1], ['תָּמָר', 1], ['חורפ', 3], ["O'Neil", 3], ['שם עט', 3], ['english 10', 1], ['123', 1], ['לא נמצא', 0]] as const) {
-    await page.getByLabel('חיפוש בכל הספרייה', { exact: true }).fill(query); await expect(page.locator('.book-list li')).toHaveCount(count);
+    await page.getByLabel('חיפוש בכל הספרייה', { exact: true }).fill(query); await expect(page.locator('.book-list li:not([hidden])')).toHaveCount(count);
   }
   await expect(page.getByRole('heading', { name: 'אין ספרים שמתאימים לחיפוש' })).toBeVisible();
   await page.getByRole('button', { name: 'ניקוי החיפוש והמסננים' }).click();
   await page.getByText('סינון הספרים', { exact: true }).click();
-  await page.getByRole('combobox', { name: 'מדף לסינון', exact: true }).selectOption(ids.rootId); await expect(page.locator('.book-list li')).toHaveCount(3);
-  await page.getByLabel('כולל צאצאי המדף').uncheck(); await expect(page.locator('.book-list li')).toHaveCount(0); await page.getByLabel('כולל צאצאי המדף').check();
+  await page.getByRole('combobox', { name: 'מדף לסינון', exact: true }).selectOption(ids.rootId); await expect(page.locator('.book-list li:not([hidden])')).toHaveCount(3);
+  await page.getByLabel('כולל צאצאי המדף').uncheck(); await expect(page.locator('.book-list li:not([hidden])')).toHaveCount(0); await page.getByLabel('כולל צאצאי המדף').check();
   await page.getByRole('combobox', { name: 'ז׳אנר לסינון', exact: true }).selectOption(ids.genreId); await page.getByRole('group', { name: 'תגיות לסינון — כל הנבחרות' }).getByRole('checkbox').check();
   await page.getByRole('combobox', { name: 'מצב קריאה לסינון', exact: true }).selectOption('read'); await page.getByRole('combobox', { name: 'זמינות', exact: true }).selectOption('available');
   await page.getByRole('combobox', { name: 'הוצאה לסינון', exact: true }).selectOption('הוצאת ניסוי'); await page.getByRole('combobox', { name: 'שפה לסינון', exact: true }).selectOption('עברית'); await page.getByRole('combobox', { name: 'שנה לסינון', exact: true }).selectOption('2020');
@@ -44,7 +44,7 @@ test('T13 letter jumps open the first matching series, retain grouping and resto
   await expect(page.locator('.series-group h2')).toHaveText(['תָּמָר ״סוף״', 'אור ראשון', 'בית בלי מספר']);
   const before = await page.evaluate(() => scrollY); await target.click(); await page.getByLabel('שם הספר', { exact: true }).fill('תָּמָר ״סוף״ חדש'); await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click(); await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => scrollY)).toBeCloseTo(before, 0);
-  await page.getByLabel('חיפוש בכל הספרייה').fill('שם עט'); await expect(page.locator('.book-list li')).toHaveCount(3);
+  await page.getByLabel('חיפוש בכל הספרייה').fill('שם עט'); await expect(page.locator('.book-list li:not([hidden])')).toHaveCount(3);
   await page.getByRole('button', { name: /תָּמָר ״סוף״ חדש.*1 עותקים/ }).click(); await page.keyboard.press('Escape'); await expect(page.getByLabel('חיפוש בכל הספרייה')).toHaveValue('שם עט');
   await page.getByRole('button', { name: 'ניקוי החיפוש והמסננים' }).click(); await page.setViewportSize({ width: 360, height: 800 });
   await toggle.click(); await page.getByRole('button', { name: 'קפיצה לאות ת', exact: true }).click(); await expect(toggle).toHaveAttribute('aria-expanded', 'true');
@@ -68,8 +68,33 @@ test('T13 isolated 1000-book baseline: query, sorting, grouped rendering and bac
     const start = performance.now(), backup = await createSnapshot(db), backupMs = performance.now() - start;
     return { samples, backupMs, backupBooks: backup.counts.books };
   });
-  await expect(page.locator('.book-list li')).toHaveCount(1000); expect(calculation.backupBooks).toBe(1000);
-  const start = Date.now(); await page.getByLabel('חיפוש בכל הספרייה').fill('0099'); await expect(page.locator('.book-list li')).toHaveCount(1); const queryRenderMs = Date.now() - start;
-  const reset = Date.now(); await page.getByLabel('חיפוש בכל הספרייה').fill('סינתטי'); await expect(page.locator('.book-list li')).toHaveCount(1000); const fullRenderMs = Date.now() - reset;
+  await expect(page.locator('.book-list li:not([hidden])')).toHaveCount(1000); expect(calculation.backupBooks).toBe(1000);
+  const retainedRow = await page.locator('.book-list li').first().elementHandle();
+  const start = Date.now(); await page.getByLabel('חיפוש בכל הספרייה').fill('0099'); await expect(page.locator('.book-list li:not([hidden])')).toHaveCount(1); const queryRenderMs = Date.now() - start;
+  expect(await retainedRow!.evaluate(row => row.isConnected)).toBe(true);
+  await expect(page.locator('.book-list li[hidden]')).toHaveCount(999);
+  const reset = Date.now(); await page.getByLabel('חיפוש בכל הספרייה').fill('סינתטי'); await expect(page.locator('.book-list li:not([hidden])')).toHaveCount(1000); const fullRenderMs = Date.now() - reset;
+  expect(await retainedRow!.evaluate(row => row.isConnected)).toBe(true);
+  await page.getByLabel('חיפוש בכל הספרייה').fill('אין תוצאה סינתטית כזאת');
+  await expect(page.getByRole('heading', { name: 'אין ספרים שמתאימים לחיפוש' })).toBeVisible();
+  await expect(page.locator('.book-list li:not([hidden])')).toHaveCount(0);
+  expect(await retainedRow!.evaluate(row => row.isConnected)).toBe(true);
+  await page.getByLabel('חיפוש בכל הספרייה').fill('סינתטי');
+  await expect(page.locator('.book-list li:not([hidden])')).toHaveCount(1000);
+  expect(await retainedRow!.evaluate(row => row.isConnected)).toBe(true);
   await test.info().attach('1000-book-baseline', { body: JSON.stringify({ ...calculation, queryRenderMs, fullRenderMs, browser: await page.evaluate(() => navigator.userAgent) }, null, 2), contentType: 'application/json' });
+});
+test('renaming across a series boundary restores focus to the current book row and preserves scroll', async ({ page }) => {
+  await page.goto(''); await expect(page.getByRole('heading', { name: /כל הספרים/ })).toBeVisible(); await seed(page);
+  const target = page.getByRole('button', { name: /תות.*1 עותקים/ });
+  await target.click();
+  const before = await page.evaluate(() => scrollY);
+  await page.getByLabel('שם הספר', { exact: true }).fill('אבוקדו מעבר סינתטי');
+  await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click();
+  await expect(page.locator('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /אבוקדו מעבר סינתטי.*1 עותקים/ })).toBeFocused();
+  await expect.poll(() => page.evaluate(() => scrollY)).toBeCloseTo(before, 0);
+  await page.getByLabel('חיפוש בכל הספרייה').fill('שם עט');
+  await expect(page.locator('.book-list li:not([hidden])')).toHaveCount(3);
+  await expect(page.getByLabel('חיפוש בכל הספרייה')).toBeFocused();
 });

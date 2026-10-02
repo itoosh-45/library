@@ -20,7 +20,8 @@ function personLabel(person: Person, people: Person[]): string {
   const same = people.filter(item => item.normalizedName === person.normalizedName).sort((a, b) => a.id.localeCompare(b.id));
   return person.name + (same.length > 1 ? ` — אדם ${same.findIndex(item => item.id === person.id) + 1}` : '');
 }
-const dateLabel = (value: string) => new Intl.DateTimeFormat('he').format(new Date(value.length === 10 ? value + 'T12:00:00' : value));
+const dateFormatter = new Intl.DateTimeFormat('he');
+const dateLabel = (value: string) => dateFormatter.format(new Date(value.length === 10 ? value + 'T12:00:00' : value));
 function LoanEntry({ loan, title, copyLabel, today, disabled = false, onBusy }: { loan: Loan; title: string; copyLabel: string; today: string; disabled?: boolean; onBusy?: (busy: boolean) => void }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   return <div className="loan-entry"><p><strong>{title}</strong> · {copyLabel}</p><p>הושאל ב־{dateLabel(loan.borrowedAt)}{loan.expectedReturnOn && ` · החזרה צפויה: ${dateLabel(loan.expectedReturnOn)}`}</p>{loan.returnedAt ? <p>הוחזר ב־{dateLabel(loan.returnedAt)}</p> : <div className="actions"><span className="loan-badge">{overdue(loan, today) ? 'מושאל · באיחור' : 'מושאל'}</span><button type="button" className="secondary" disabled={disabled || busy} onClick={async () => { setBusy(true); onBusy?.(true); setError(''); try { await returnCopy(db, loan.id); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); onBusy?.(false); } }}>רישום החזרה</button></div>}<p className="error-message" role="alert">{error}</p></div>;

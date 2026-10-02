@@ -12,13 +12,25 @@ import { Sheet } from './Sheet';
 import { CatalogPanel, Provenance } from './CatalogPanel';
 import { saveBookSelections, type CatalogSelection, type RecognitionSelection } from './data/catalogSave';
 import { recognitionInput, recognitionMetadataFields } from './data/recognition';
+import { observeNearViewport } from './nearViewport';
 export { Sheet } from './Sheet';
 const BarcodeScanner = lazy(() => import('./BarcodeScanner'));
 const SingleBookVision = lazy(() => import('./SingleBookVision'));
 const overlapsSource = (field: MetadataField, selected: MetadataField[]) => selected.includes(field) || (field.startsWith('isbn') && selected.some(next => next.startsWith('isbn')));
 const remainingRecognition = (selection: RecognitionSelection, fields: MetadataField[]) => ({ ...selection, selected: selection.selected.filter(field => !recognitionMetadataFields(selection.item, [field]).some(metadata => overlapsSource(metadata, fields))) });
 
-export function Thumbnail({ imageId, image, alt = 'כריכת הספר' }: { imageId?: string | null; image?: StoredImage | null; alt?: string }) {
+export function Thumbnail({ imageId, image, alt = 'כריכת הספר', defer = false }: { imageId?: string | null; image?: StoredImage | null; alt?: string; defer?: boolean }) {
+  const [near, setNear] = useState(!defer);
+  const container = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!defer || !imageId || !container.current) return;
+    return observeNearViewport(container.current, setNear);
+  }, [defer, imageId]);
+  if (!defer) return <LoadedThumbnail imageId={imageId} image={image} alt={alt} />;
+  const load = near || !!image;
+  return <span ref={container} className={load ? 'thumbnail' : 'book-placeholder'} aria-hidden={load ? undefined : true}>{load ? <LoadedThumbnail imageId={imageId} image={image} alt={alt} /> : '▤'}</span>;
+}
+function LoadedThumbnail({ imageId, image, alt }: { imageId?: string | null; image?: StoredImage | null; alt: string }) {
   const stored = useLiveQuery(() => imageId ? db.images.get(imageId) : undefined, [imageId]);
   const blob = image?.blob ?? stored?.blob;
   const ref = useRef<HTMLImageElement>(null);

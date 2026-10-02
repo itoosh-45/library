@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './data/database';
 import { LibraryValidationError, renameLibrary } from './data/library';
@@ -12,6 +12,7 @@ import { bookComparator, emptyFilters, filterBooks, type SortKey } from './data/
 import { LoansPanel } from './LoansPanel';
 import { OfflinePanel } from './OfflinePanel';
 import { useOnline } from './pwa';
+import { restoreBookFocus } from './focusRestore';
 
 const VisionKey = lazy(() => import('./VisionKey'));
 const ShelfBatch = lazy(() => import('./ShelfBatch'));
@@ -59,8 +60,12 @@ export function App() {
   const [descending, setDescending] = useState(false);
   const savedScroll = useRef(0);
   const savedFocus = useRef<HTMLElement | null>(null);
-  function openBook(book: Book) { savedScroll.current = window.scrollY; savedFocus.current = document.activeElement as HTMLElement; setEditor({ book, key: Date.now() }); }
-  function closeEditor() { setEditor(undefined); requestAnimationFrame(() => { savedFocus.current?.focus({ preventScroll: true }); window.scrollTo({ top: savedScroll.current, behavior: 'instant' }); }); }
+  const savedBookId = useRef<string | undefined>(undefined);
+  const openBook = useCallback((book: Book) => { savedScroll.current = window.scrollY; savedFocus.current = document.activeElement as HTMLElement; savedBookId.current = book.id; setEditor({ book, key: Date.now() }); }, []);
+  function closeEditor() {
+    setEditor(undefined);
+    restoreBookFocus(savedFocus.current, savedBookId.current, savedScroll.current);
+  }
   const [displayError, setDisplayError] = useState('');
   useEffect(() => {
     const changed = () => setSection(currentSection());
@@ -73,18 +78,19 @@ export function App() {
     shelves: await db.shelves.toArray(), bookShelves: await db.bookShelves.toArray(), loans: await db.loans.toArray(), tags: await db.tags.toArray(), genres: await db.genres.toArray(), series: await db.series.toArray(), openLoans: await db.loans.where('openFlag').equals(1).count(),
     displayMode: (await db.settings.get('displayMode'))?.value ?? 'compact',
   }));
+  const visibleBooks = useMemo(() => data ? filterBooks(data, filters, showArchived) : [], [data, filters, showArchived]);
+  const compare = useMemo(() => data ? bookComparator(data, sort, descending) : undefined, [data, sort, descending]);
   if (!data) return <p className="loading" role="status">טוען את הספרייה…</p>;
   const title = sections.find(item => item.id === section)!.label;
-  const visibleBooks = filterBooks(data, filters, showArchived);
   const total = section === 'books' ? visibleBooks.length : section === 'shelves' ? data.shelves.length : section === 'loans' ? data.openLoans : null;
-  const list: BookListProps = { ...data, books: visibleBooks, compare: bookComparator(data, sort, descending), alphabetical: ['title', 'author', 'genre'].includes(sort), onOpen: openBook };
+  const list: BookListProps = { ...data, books: visibleBooks, compare, alphabetical: ['title', 'author', 'genre'].includes(sort), onOpen: openBook };
   return <div className="app-shell">
     <a className="skip-link" href="#main-content" onClick={event => { event.preventDefault(); document.getElementById('main-content')?.focus(); }}>דילוג לתוכן</a>
     <aside className="sidebar"><div className="brand"><Icon kind="book" /><span>הספרייה שלי</span></div><p className="library-name">{data.name}</p><nav aria-label="ניווט ראשי">{sections.map(item => <a key={item.id} href={'#' + item.id} aria-current={section === item.id ? 'page' : undefined}><Icon kind={item.icon} /><span>{item.label}</span></a>)}</nav><p className="local-note">הספרייה שלך נשמרת<br />בדפדפן הזה.</p></aside>
     <main id="main-content" tabIndex={-1} className="content">{!online && <p className="notice" role="status">אין חיבור לרשת. הספרייה המקומית זמינה; חיפוש בקטלוגים וזיהוי תמונות דורשים רשת.</p>}<header className="page-heading"><div><p className="eyebrow">{data.name}</p><h1>{title}{total !== null && <span className="total">{total}</span>}</h1></div><span className="local-badge"><span aria-hidden="true" />ספרייה מקומית</span></header>
-      {['books', 'shelves', 'collections'].includes(section) && <div className="toolbar"><button onClick={() => { savedScroll.current = window.scrollY; savedFocus.current = document.activeElement as HTMLElement; setEditor({ key: Date.now() }); }}>הוספת ספר</button><button type="button" className="secondary" onClick={() => setShelfBatch(true)}>צילום מדף בכמה תמונות</button><label className="check"><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} />כולל ספרים בארכיון</label><button className="secondary" onClick={async () => { try { await db.settings.put({ key: 'displayMode', value: data.displayMode === 'compact' ? 'expanded' : 'compact' }); setDisplayError(''); } catch { setDisplayError('התצוגה לא נשמרה. נסה שוב.'); } }}>{data.displayMode === 'compact' ? 'תצוגה מורחבת' : 'תצוגה מצומצמת'}</button><p role="alert">{displayError}</p></div>}
+      {['books', 'shelves', 'collections'].includes(section) && <div className="toolbar"><button onClick={() => { savedScroll.current = window.scrollY; savedFocus.current = document.activeElement as HTMLElement; savedBookId.current = undefined; setEditor({ key: Date.now() }); }}>הוספת ספר</button><button type="button" className="secondary" onClick={() => setShelfBatch(true)}>צילום מדף בכמה תמונות</button><label className="check"><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} />כולל ספרים בארכיון</label><button className="secondary" onClick={async () => { try { await db.settings.put({ key: 'displayMode', value: data.displayMode === 'compact' ? 'expanded' : 'compact' }); setDisplayError(''); } catch { setDisplayError('התצוגה לא נשמרה. נסה שוב.'); } }}>{data.displayMode === 'compact' ? 'תצוגה מורחבת' : 'תצוגה מצומצמת'}</button><p role="alert">{displayError}</p></div>}
       {['books', 'shelves', 'collections'].includes(section) && <><SearchControls data={data} filters={filters} setFilters={setFilters} sort={sort} setSort={setSort} descending={descending} setDescending={setDescending} /><Statistics data={data} books={visibleBooks} /></>}
-      {section === 'settings' ? <section className="settings-card"><h2>הספרייה שלך</h2><p>בחר שם שיופיע בראש הספרייה.</p><LibraryNameForm name={data.name} /><div className="setting-note"><h3>שמירה במכשיר</h3><p>הנתונים נשמרים בדפדפן ובמכשיר שבהם פתחת את הספרייה.</p></div><Suspense fallback={<p role="status">טוען הגדרות זיהוי…</p>}><VisionKey /></Suspense><BackupPanel /><OfflinePanel /></section> : section === 'shelves' ? <ShelvesPanel list={list} /> : section === 'collections' ? <CollectionsPanel list={list} /> : section === 'loans' ? <LoansPanel /> : section === 'books' && visibleBooks.length > 0 ? <BookList {...list} /> : <section className="empty-state"><div className="empty-icon"><Icon kind={sections.find(item => item.id === section)!.icon} /></div><h2>{section === 'books' ? (data.books.length ? 'אין ספרים שמתאימים לחיפוש' : 'כאן מתחילה הספרייה שלך') : 'ההשאלות שלך'}</h2><p>{section === 'books' ? 'הספרים שלך יופיעו כאן ברשימה אחת מסודרת.' : 'כאן תוכל לעקוב אחר עותקים שהשאלת ומועד החזרתם.'}</p><span className="empty-caption">{section === 'books' ? 'אין ספרים בתצוגה הזאת' : 'אין השאלות פתוחות'}</span></section>}
+      {section === 'settings' ? <section className="settings-card"><h2>הספרייה שלך</h2><p>בחר שם שיופיע בראש הספרייה.</p><LibraryNameForm name={data.name} /><div className="setting-note"><h3>שמירה במכשיר</h3><p>הנתונים נשמרים בדפדפן ובמכשיר שבהם פתחת את הספרייה.</p></div><Suspense fallback={<p role="status">טוען הגדרות זיהוי…</p>}><VisionKey /></Suspense><BackupPanel /><OfflinePanel /></section> : section === 'shelves' ? <ShelvesPanel list={list} /> : section === 'collections' ? <CollectionsPanel list={list} /> : section === 'loans' ? <LoansPanel /> : section === 'books' ? <><BookList {...list} allBooks={data.books} />{visibleBooks.length === 0 && <section className="empty-state"><div className="empty-icon"><Icon kind={sections.find(item => item.id === section)!.icon} /></div><h2>{section === 'books' ? (data.books.length ? 'אין ספרים שמתאימים לחיפוש' : 'כאן מתחילה הספרייה שלך') : 'ההשאלות שלך'}</h2><p>{section === 'books' ? 'הספרים שלך יופיעו כאן ברשימה אחת מסודרת.' : 'כאן תוכל לעקוב אחר עותקים שהשאלת ומועד החזרתם.'}</p><span className="empty-caption">{section === 'books' ? 'אין ספרים בתצוגה הזאת' : 'אין השאלות פתוחות'}</span></section>}</> : null}
     </main>
     {shelfBatch && <Suspense fallback={<p role="status">טוען צילום מדף…</p>}><ShelfBatch onClose={() => setShelfBatch(false)} /></Suspense>}
     {editor && <BookEditor key={editor.key} book={editor.book} authorNames={editor.book?.authorIds.map(id => data.authors.find(author => author.id === id)?.displayName ?? '') ?? []} onClose={closeEditor} onOpen={book => setEditor({ book, key: Date.now() })} />}

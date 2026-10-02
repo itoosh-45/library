@@ -9,6 +9,8 @@ import { errorMessage } from './data/errors';
 import { CollectionFields } from './CollectionFields';
 import { BookLoans } from './LoansPanel';
 import { Sheet } from './Sheet';
+import { CatalogPanel, Provenance } from './CatalogPanel';
+import { saveCatalogSelections, type CatalogSelection } from './data/catalogSave';
 export { Sheet } from './Sheet';
 
 export function Thumbnail({ imageId, image, alt = 'כריכת הספר' }: { imageId?: string | null; image?: StoredImage | null; alt?: string }) {
@@ -34,6 +36,7 @@ export function BookEditor({ book, authorNames, onClose, onOpen }: { book?: Book
   const [duplicates, setDuplicates] = useState<Book[]>([]);
   const [safety, setSafety] = useState<Snapshot>();
   const [confirmed, setConfirmed] = useState(false);
+  const [catalogSelections, setCatalogSelections] = useState<CatalogSelection[]>([]);
   const copies = useLiveQuery(() => book ? db.copies.where('bookId').equals(book.id).toArray() : [], [book?.id]) ?? [];
   function field(key: Exclude<keyof BookInput, 'authors' | 'readStatus' | 'shelfIds' | 'genreIds' | 'tagIds' | 'seriesId' | 'seriesNumber'>, label: string, numeric = false) {
     return <label className="field">{label}<input value={input[key]} inputMode={numeric ? 'numeric' : undefined} maxLength={key === 'personalNotes' ? 20000 : 1000} onChange={event => { setInput({ ...input, [key]: event.target.value }); setDirty(true); setDuplicates([]); }} /></label>;
@@ -42,7 +45,9 @@ export function BookEditor({ book, authorNames, onClose, onOpen }: { book?: Book
     event?.preventDefault(); setError(''); setBusy(true);
     try {
       if (!allowDuplicate) { const matches = await duplicateBooks(db, input, book?.id); if (matches.length) { setDuplicates(matches); return; } }
-      await saveBook(db, input, book, image, allowDuplicate); onClose();
+      if (catalogSelections.length) await saveCatalogSelections(db, input, catalogSelections, book, image, allowDuplicate);
+      else await saveBook(db, input, book, image, allowDuplicate);
+      onClose();
     } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); }
   }
   async function upload(file?: File) {
@@ -58,6 +63,8 @@ export function BookEditor({ book, authorNames, onClose, onOpen }: { book?: Book
   }
   return <Sheet title={book ? 'עריכת ספר' : 'הוספת ספר'} onClose={onClose} busy={busy} dirty={dirty}>
     {dirtyCopyId && <p className="notice">יש שינוי בעותק. שמור את העותק לפני שמירה נוספת של הספר.</p>}
+    <CatalogPanel input={input} disabled={busy || !!dirtyCopyId} onApply={(draft, candidate, selected) => { setInput(draft); setDirty(true); setDuplicates([]); setCatalogSelections(old => [...old.map(item => ({ ...item, selected: item.selected.filter(field => !selected.includes(field) && !(field.startsWith('isbn') && selected.some(next => next.startsWith('isbn')))) })).filter(item => item.selected.length), { candidate, selected }]); }} />
+    {book && <Provenance bookId={book.id} />}
     <form onSubmit={event => void save(event)}><fieldset disabled={busy || !!dirtyCopyId}><p className="hint">כל השדות לבחירה. אפשר לשמור ספר גם ללא שם ולמלא בהמשך.</p>
       <div className="cover-editor"><Thumbnail imageId={image === undefined ? book?.primaryImageId : null} image={image} /><label className="field">תמונת כריכה<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={event => { void upload(event.target.files?.[0]); event.target.value = ''; }} /></label><button type="button" className="secondary" onClick={() => { setImage(null); setDirty(true); }}>הסרת תמונה</button></div>
       {field('title', 'שם הספר')}
@@ -72,8 +79,8 @@ export function BookEditor({ book, authorNames, onClose, onOpen }: { book?: Book
     </fieldset></form>
     {book && <BookLoans book={book} copies={copies} disabled={busy || dirty || !!dirtyCopyId} onBusy={setBusy} />}
     {book && <section className="copies-section"><h3>עותקים ({copies.length})</h3><p className="hint">עריכה והוספת עותק שומרות גם את הפרטים שמופיעים למעלה.</p>{copies.map(copy => <CopyEditor key={copy.id} copy={copy} disabled={busy || (!!dirtyCopyId && dirtyCopyId !== copy.id)} onDirty={() => { setDirty(true); setDirtyCopyId(copy.id); }} onSave={async values => {
-      setBusy(true); try { await db.transaction('rw', [db.books, db.copies, db.authors, db.images, db.loans, db.shelves, db.bookShelves, db.genres, db.tags, db.series], async () => { const updated = await saveBook(db, input, book, image); await changeCopy(db, book.id, updated.revision, { id: copy.id, ...values }); }); onOpen((await db.books.get(book.id))!); } finally { setBusy(false); }
-    }} />)}<button type="button" className="secondary" disabled={busy || !!dirtyCopyId} onClick={async () => { setBusy(true); setError(''); try { await db.transaction('rw', [db.books, db.copies, db.authors, db.images, db.loans, db.shelves, db.bookShelves, db.genres, db.tags, db.series], async () => { const updated = await saveBook(db, input, book, image); await changeCopy(db, book.id, updated.revision, {}); }); onOpen((await db.books.get(book.id))!); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); } }}>הוספת עותק</button>
+      setBusy(true); try { await db.transaction('rw', db.tables, async () => { const updated = catalogSelections.length ? await saveCatalogSelections(db, input, catalogSelections, book, image) : await saveBook(db, input, book, image); await changeCopy(db, book.id, updated.revision, { id: copy.id, ...values }); }); onOpen((await db.books.get(book.id))!); } finally { setBusy(false); }
+    }} />)}<button type="button" className="secondary" disabled={busy || !!dirtyCopyId} onClick={async () => { setBusy(true); setError(''); try { await db.transaction('rw', db.tables, async () => { const updated = catalogSelections.length ? await saveCatalogSelections(db, input, catalogSelections, book, image) : await saveBook(db, input, book, image); await changeCopy(db, book.id, updated.revision, {}); }); onOpen((await db.books.get(book.id))!); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); } }}>הוספת עותק</button>
       <details className="delete-section"><summary>מחיקת הספר</summary><p>יימחקו הספר, {copies.length} העותקים ותמונתו אם אינה משמשת ספר אחר. חלופה: ארכוב עותקים שומר את הספר.</p><button type="button" className="secondary" disabled={busy} onClick={() => void protectDelete()}>הורדת גיבוי מגן לפני מחיקה</button>{safety && <><label className="check"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />וידאתי שהגיבוי ירד למחשב ואני מאשר את המחיקה</label><button type="button" disabled={!confirmed || busy} onClick={() => void remove()}>מחיקה סופית של הספר</button></>}</details>
     </section>}
   </Sheet>;

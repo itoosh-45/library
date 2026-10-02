@@ -33,7 +33,7 @@ export function bookFields(input: BookInput) {
   if (typeof input.readStatus !== 'string' || !Object.hasOwn(readingStates, input.readStatus)) return fail('מצב הקריאה אינו תקין.');
   return { title: optional(input.title), subtitle: optional(input.subtitle), ...parseISBN(input.isbn), danacode: optional(input.danacode), publisher: optional(input.publisher), publicationYear: number(input.publicationYear, 9999), edition: optional(input.edition), volume: optional(input.volume), language: optional(input.language), pages: number(input.pages, 100000), personalNotes: optional(input.personalNotes, 20000), readStatus: input.readStatus, titleSortKey: normalizeText(input.title) };
 }
-function comparableISBN(book: Pick<Book, 'isbn10' | 'isbn13'>): string | null {
+export function comparableISBN(book: Pick<Book, 'isbn10' | 'isbn13'>): string | null {
   if (book.isbn13) return book.isbn13;
   if (!book.isbn10) return null;
   const prefix = '978' + book.isbn10.slice(0, 9);
@@ -51,7 +51,7 @@ export async function saveBook(database: LibraryDatabase, input: BookInput, exis
   const fields = bookFields(input);
   if (!Array.isArray(input.authors) || input.authors.length > 30) return fail('רשימת המחברים אינה תקינה.');
   const names = [...new Set(input.authors.map(name => optional(name)).filter((name): name is string => !!name))];
-  return database.transaction('rw', [database.books, database.copies, database.authors, database.images, database.shelves, database.bookShelves, database.genres, database.tags, database.series], async () => {
+  return database.transaction('rw', [database.books, database.copies, database.authors, database.images, database.shelves, database.bookShelves, database.genres, database.tags, database.series, database.metadataSources], async () => {
     const current = existing ? await database.books.get(existing.id) : undefined;
     if (existing && (!current || current.revision !== existing.revision)) return fail('הספר השתנה בחלון אחר. סגור ופתח אותו מחדש לפני העריכה.');
     if (!allowDuplicate && (await duplicateBooks(database, input, existing?.id)).length) return fail('ISBN זה כבר נמצא בספרייה. בחר כיצד להמשיך.');
@@ -81,6 +81,14 @@ export async function saveBook(database: LibraryDatabase, input: BookInput, exis
     if (image) await database.images.put(image);
     const book = { ...base, ...fields, ...classification, authorIds, primaryImageId: image === undefined ? base.primaryImageId : image?.id ?? null, updatedAt: new Date().toISOString(), revision: current ? current.revision + 1 : 1 };
     await database.books.put(book);
+    if (current) {
+      const previousNames = (await database.authors.bulkGet(current.authorIds)).map(author => author!.displayName);
+      const sources = await database.metadataSources.where('bookId').equals(book.id).toArray();
+      for (const source of sources) {
+        const changed = source.selectedFields.filter(field => field === 'authors' ? JSON.stringify(previousNames) !== JSON.stringify(names) : current[field] !== book[field]);
+        if (changed.length) await database.metadataSources.update(source.id, { userOverriddenFields: [...new Set([...source.userOverriddenFields, ...changed])] });
+      }
+    }
     const links = await database.bookShelves.where('bookId').equals(book.id).toArray();
     await database.bookShelves.bulkDelete(links.filter(link => !shelfIds.includes(link.shelfId)).map(link => link.id));
     for (const shelfId of shelfIds) if (!links.some(link => link.shelfId === shelfId)) await database.bookShelves.add({ id: crypto.randomUUID(), bookId: book.id, shelfId });

@@ -119,7 +119,7 @@ it('delete removes only the selected book and copies after a safety snapshot', a
   await deleteBook(database, first.id, (await createSnapshot(database)).fingerprint);
   expect(await database.books.toArray()).toEqual([second]); expect(await database.copies.count()).toBe(1); expect(await database.authors.count()).toBe(1);
 });
-it('basic snapshot refuses unsupported future-stage data rather than dropping it', async () => {
+it('basic snapshot refuses malformed stored provenance rather than dropping it', async () => {
   await database.metadataSources.add({ id: crypto.randomUUID() } as never);
-  await expect(createSnapshot(database)).rejects.toThrow('אינו תומך'); expect(await database.metadataSources.count()).toBe(1);
+  await expect(createSnapshot(database)).rejects.toThrow(); expect(await database.metadataSources.count()).toBe(1);
 });

@@ -1,20 +1,21 @@
 import type { LibraryDatabase } from './database';
-import type { Author, Book, BookShelf, Copy, Loan, NamedItem, Person, Series, Setting, Shelf, StoredImage } from './models';
+import type { Author, Book, BookShelf, Copy, Loan, MetadataSource, NamedItem, Person, Series, Setting, Shelf, StoredImage } from './models';
 import { LibraryValidationError, normalizeText } from './library';
 import { hashBytes, jpegDimensions } from './images';
 import { parseISBN, readingStates } from './books';
 import { validDay } from './loans';
+import { validateMetadataSource } from './metadata';
 
-interface Core { books: Book[]; copies: Copy[]; authors: Author[]; settings: Setting[]; images: StoredImage[]; shelves: Shelf[]; bookShelves: BookShelf[]; series: Series[]; genres: NamedItem[]; tags: NamedItem[]; people: Person[]; loans: Loan[] }
+interface Core { books: Book[]; copies: Copy[]; authors: Author[]; settings: Setting[]; images: StoredImage[]; shelves: Shelf[]; bookShelves: BookShelf[]; series: Series[]; genres: NamedItem[]; tags: NamedItem[]; people: Person[]; loans: Loan[]; metadataSources: MetadataSource[] }
 type ImageJSON = Omit<StoredImage, 'blob'> & { base64: string };
 type Payload = Omit<Core, 'images'> & { images: ImageJSON[] };
-interface Backup { format: 'personal-library-basic'; version: 3; schemaVersion: 2; appVersion: string; libraryId: string; exportedAt: string; counts: Record<keyof Core, number>; checksum: string; data: Payload }
+interface Backup { format: 'personal-library-basic'; version: 4; schemaVersion: 2; appVersion: string; libraryId: string; exportedAt: string; counts: Record<keyof Core, number>; checksum: string; data: Payload }
 export interface Snapshot { text: string; fingerprint: string; counts: Backup['counts'] }
 export interface ValidatedBackup { data: Core; counts: Backup['counts']; libraryName: string }
-const coreKeys = ['books', 'copies', 'authors', 'settings', 'images', 'shelves', 'bookShelves', 'series', 'genres', 'tags', 'people', 'loans'] as const;
-const version2Keys = coreKeys.filter(key => key !== 'people' && key !== 'loans');
+const coreKeys = ['books', 'copies', 'authors', 'settings', 'images', 'shelves', 'bookShelves', 'series', 'genres', 'tags', 'people', 'loans', 'metadataSources'] as const;
+const version3Keys = coreKeys.filter(key => key !== 'metadataSources');
+const version2Keys = version3Keys.filter(key => key !== 'people' && key !== 'loans');
 const legacyKeys = ['books', 'copies', 'authors', 'settings', 'images'];
-const unsupported = ['metadataSources'] as const;
 const bad = (message = 'קובץ הגיבוי אינו תקין או מכיל שדות שאינם נתמכים.'): never => { throw new LibraryValidationError(message); };
 const object = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return bad();
@@ -36,8 +37,7 @@ function canonical(core: Core): string {
   return JSON.stringify({ ...core, images: core.images.map(image => ({ ...image, blob: undefined })) });
 }
 async function readCore(database: LibraryDatabase): Promise<Core> {
-  for (const name of unsupported) if (await database.table(name).count()) return bad('הגיבוי הבסיסי אינו תומך עדיין בנתוני קטלוג משלבים מאוחרים. לא בוצע שינוי.');
-  return { books: await database.books.toArray(), copies: await database.copies.toArray(), authors: await database.authors.toArray(), settings: await database.settings.toArray(), images: await database.images.toArray(), shelves: await database.shelves.toArray(), bookShelves: await database.bookShelves.toArray(), series: await database.series.toArray(), genres: await database.genres.toArray(), tags: await database.tags.toArray(), people: await database.people.toArray(), loans: await database.loans.toArray() };
+  return { books: await database.books.toArray(), copies: await database.copies.toArray(), authors: await database.authors.toArray(), settings: await database.settings.toArray(), images: await database.images.toArray(), shelves: await database.shelves.toArray(), bookShelves: await database.bookShelves.toArray(), series: await database.series.toArray(), genres: await database.genres.toArray(), tags: await database.tags.toArray(), people: await database.people.toArray(), loans: await database.loans.toArray(), metadataSources: await database.metadataSources.toArray() };
 }
 const countsOf = (core: Core): Backup['counts'] => Object.fromEntries(coreKeys.map(key => [key, core[key].length])) as Backup['counts'];
 const encode = (bytes: Uint8Array): string => {
@@ -46,7 +46,7 @@ const encode = (bytes: Uint8Array): string => {
 };
 async function envelope(core: Core): Promise<Backup> {
   const data: Payload = { ...core, images: await Promise.all(core.images.map(async ({ blob, ...image }) => ({ ...image, base64: encode(new Uint8Array(await blob.arrayBuffer())) }))) };
-  return { format: 'personal-library-basic', version: 3, schemaVersion: 2, appVersion: '0.5.0', libraryId: core.settings.find(setting => setting.key === 'libraryId')!.value, exportedAt: new Date().toISOString(), counts: countsOf(core), checksum: await hashBytes(new TextEncoder().encode(JSON.stringify(data)).buffer), data };
+  return { format: 'personal-library-basic', version: 4, schemaVersion: 2, appVersion: '0.6.0', libraryId: core.settings.find(setting => setting.key === 'libraryId')!.value, exportedAt: new Date().toISOString(), counts: countsOf(core), checksum: await hashBytes(new TextEncoder().encode(JSON.stringify(data)).buffer), data };
 }
 export async function createSnapshot(database: LibraryDatabase): Promise<Snapshot> {
   const core = await database.transaction('r', database.tables, () => readCore(database));
@@ -61,17 +61,20 @@ export async function validateBackup(source: string): Promise<ValidatedBackup> {
   const root = exact(parsed, ['format', 'version', 'schemaVersion', 'appVersion', 'libraryId', 'exportedAt', 'counts', 'checksum', 'data']);
   const legacy = root.version === 1 && root.schemaVersion === 1;
   const version2 = root.version === 2 && root.schemaVersion === 2;
-  if (root.format !== 'personal-library-basic' || (!legacy && !version2 && (root.version !== 3 || root.schemaVersion !== 2))) return bad('פורמט או גרסת הגיבוי אינם נתמכים. הספרייה לא שונתה.');
+  const version3 = root.version === 3 && root.schemaVersion === 2;
+  if (root.format !== 'personal-library-basic' || (!legacy && !version2 && !version3 && (root.version !== 4 || root.schemaVersion !== 2))) return bad('פורמט או גרסת הגיבוי אינם נתמכים. הספרייה לא שונתה.');
   if (!text(root.appVersion, 100) || !uuid(root.libraryId) || !date(root.exportedAt) || !text(root.checksum, 64)) return bad();
-  const data = exact(root.data, legacy ? legacyKeys : version2 ? version2Keys : [...coreKeys]);
+  const data = exact(root.data, legacy ? legacyKeys : version2 ? version2Keys : version3 ? version3Keys : [...coreKeys]);
   for (const key of Object.keys(data)) if (!Array.isArray(data[key]) || (data[key] as unknown[]).length > 20000) return bad();
   if (await hashBytes(new TextEncoder().encode(JSON.stringify(data)).buffer) !== root.checksum) return bad('בדיקת שלמות הגיבוי נכשלה. הספרייה לא שונתה.');
-  const payload = (legacy ? { ...data, shelves: [], bookShelves: [], series: [], genres: [], tags: [], people: [], loans: [] } : version2 ? { ...data, people: [], loans: [] } : data) as unknown as Payload;
+  const payload = (legacy ? { ...data, shelves: [], bookShelves: [], series: [], genres: [], tags: [], people: [], loans: [], metadataSources: [] } : version2 ? { ...data, people: [], loans: [], metadataSources: [] } : version3 ? { ...data, metadataSources: [] } : data) as unknown as Payload;
   const ids = <T extends { id: string }>(rows: T[]) => {
     if (rows.some(row => !uuid(object(row).id)) || new Set(rows.map(row => row.id)).size !== rows.length) return bad();
     return new Set(rows.map(row => row.id));
   };
   const bookIds = ids(payload.books), authorIds = ids(payload.authors), imageIds = ids(payload.images), copyIds = ids(payload.copies), personIds = ids(payload.people); ids(payload.loans);
+  ids(payload.metadataSources);
+  for (const source of payload.metadataSources) { validateMetadataSource(source); if (!bookIds.has(source.bookId)) return bad(); }
   const shelfIds = ids(payload.shelves), seriesIds = ids(payload.series), genreIds = ids(payload.genres), tagIds = ids(payload.tags); ids(payload.bookShelves);
   for (const [rows, isSeries] of [[payload.series, true], [payload.genres, false], [payload.tags, false]] as const) {
     const names = new Set<string>();
@@ -168,7 +171,7 @@ export async function validateBackup(source: string): Promise<ValidatedBackup> {
     }
   }
   const core: Core = { ...payload, images };
-  const countKeys = legacy ? legacyKeys : version2 ? version2Keys : [...coreKeys];
+  const countKeys = legacy ? legacyKeys : version2 ? version2Keys : version3 ? version3Keys : [...coreKeys];
   const counts = exact(root.counts, countKeys);
   for (const key of countKeys as (keyof Core)[]) if (counts[key] !== core[key].length) return bad();
   return { data: core, counts: countsOf(core), libraryName: core.settings.find(setting => setting.key === 'libraryName')!.value };
@@ -193,6 +196,7 @@ export async function deleteBook(database: LibraryDatabase, id: string, expected
     for (const copy of copies) if (await database.loans.where('copyId').equals(copy.id).count()) return bad('לספר קיימת היסטוריית השאלות. יש לארכב את העותקים במקום למחוק.');
     await database.copies.bulkDelete(copies.map(copy => copy.id)); await database.books.delete(id);
     await database.bookShelves.where('bookId').equals(id).delete();
+    await database.metadataSources.where('bookId').equals(id).delete();
     const others = await database.books.toArray();
     if (book.primaryImageId && !others.some(other => other.primaryImageId === book.primaryImageId) && !await database.shelves.filter(shelf => shelf.imageId === book.primaryImageId).count()) await database.images.delete(book.primaryImageId);
     for (const authorId of book.authorIds) if (!others.some(other => other.authorIds.includes(authorId))) await database.authors.delete(authorId);

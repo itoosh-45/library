@@ -25,5 +25,5 @@ export type SettingKey = 'libraryId' | 'libraryName' | 'displayMode' | 'preferre
 export interface Setting { key: SettingKey; value: string }
 export type MetadataField = 'title' | 'subtitle' | 'authors' | 'isbn10' | 'isbn13' | 'danacode' | 'publisher' | 'publicationYear' | 'edition' | 'volume' | 'language' | 'pages';
 export interface MetadataSource { id: string; bookId: string; provider: string; recordId: string; sourceUrl: string | null; fetchedAt: string; fieldValues: Partial<Record<MetadataField, string | number | string[] | null>>; selectedFields: MetadataField[]; userOverriddenFields: MetadataField[] }
-export interface MetadataCache { key: string; provider: string; fetchedAt: string; expiresAt: string; minimalPayload: MetadataSource['fieldValues'][] }
+export interface MetadataCache { key: string; provider: string; fetchedAt: string; expiresAt: string; minimalPayload: MetadataSource['fieldValues'][]; candidates?: { provider: string; recordId: string; sourceUrl: string | null; fetchedAt: string; kind: 'work' | 'edition' | 'volume'; fields: MetadataSource['fieldValues']; warnings: string[] }[] }
 export interface RecognitionDraft { id: string; batchId: string; imageRefs: string[]; extractedItems: MetadataSource['fieldValues'][]; decisions: { itemId: string; approved: boolean }[]; status: 'pending' | 'reviewing' | 'complete'; updatedAt: string }

@@ -21,6 +21,8 @@ The product is a personal Hebrew/RTL library app. Follow the approved project pl
 
 ## Work and validation
 
+Stage 9 scanner is built locally in App 0.7.0: lazy native/ZXing decoding, camera cancellation and manual/image alternatives feed the catalog draft with explicit approval. See docs/phase-09-progress.md for local test evidence and outstanding physical-device checks. Stage 10 is the next independent implementation step; cycle 5 is not complete without its evidence.
+
 Use npm run check and npm run test:browser as appropriate. Run targeted checks for changed behavior. Synthetic fixtures, desktop browsers and CI do not establish live provider accuracy, physical phone behavior or deployment success.
 
 Respond in Hebrew. Ask one question at a time only when needed. Use commit identity itoosh-45 <321763872+itoosh-45@users.noreply.github.com>. After committing, report the repository URL and author. Do not spawn subagents without an explicit user request.

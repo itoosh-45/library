@@ -46,7 +46,7 @@ const encode = (bytes: Uint8Array): string => {
 };
 async function envelope(core: Core): Promise<Backup> {
   const data: Payload = { ...core, images: await Promise.all(core.images.map(async ({ blob, ...image }) => ({ ...image, base64: encode(new Uint8Array(await blob.arrayBuffer())) }))) };
-  return { format: 'personal-library-basic', version: 4, schemaVersion: 2, appVersion: '0.6.0', libraryId: core.settings.find(setting => setting.key === 'libraryId')!.value, exportedAt: new Date().toISOString(), counts: countsOf(core), checksum: await hashBytes(new TextEncoder().encode(JSON.stringify(data)).buffer), data };
+  return { format: 'personal-library-basic', version: 4, schemaVersion: 2, appVersion: '0.7.0', libraryId: core.settings.find(setting => setting.key === 'libraryId')!.value, exportedAt: new Date().toISOString(), counts: countsOf(core), checksum: await hashBytes(new TextEncoder().encode(JSON.stringify(data)).buffer), data };
 }
 export async function createSnapshot(database: LibraryDatabase): Promise<Snapshot> {
   const core = await database.transaction('r', database.tables, () => readCore(database));

@@ -136,5 +136,17 @@
     "engines": {
       "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
     }
+  },
+  {
+    "name": "@zxing/browser",
+    "version": "0.2.1",
+    "license": "MIT",
+    "engines": null
+  },
+  {
+    "name": "@zxing/library",
+    "version": "0.23.0",
+    "license": "Apache-2.0",
+    "engines": null
   }
 ]

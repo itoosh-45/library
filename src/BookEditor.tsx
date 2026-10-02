@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './data/database';
 import type { Book, Copy, StoredImage } from './data/models';
@@ -12,6 +12,7 @@ import { Sheet } from './Sheet';
 import { CatalogPanel, Provenance } from './CatalogPanel';
 import { saveCatalogSelections, type CatalogSelection } from './data/catalogSave';
 export { Sheet } from './Sheet';
+const BarcodeScanner = lazy(() => import('./BarcodeScanner'));
 
 export function Thumbnail({ imageId, image, alt = 'כריכת הספר' }: { imageId?: string | null; image?: StoredImage | null; alt?: string }) {
   const stored = useLiveQuery(() => imageId ? db.images.get(imageId) : undefined, [imageId]);
@@ -37,6 +38,7 @@ export function BookEditor({ book, authorNames, onClose, onOpen }: { book?: Book
   const [safety, setSafety] = useState<Snapshot>();
   const [confirmed, setConfirmed] = useState(false);
   const [catalogSelections, setCatalogSelections] = useState<CatalogSelection[]>([]);
+  const [scanner, setScanner] = useState(false), [barcodeRevision, setBarcodeRevision] = useState(0);
   const copies = useLiveQuery(() => book ? db.copies.where('bookId').equals(book.id).toArray() : [], [book?.id]) ?? [];
   function field(key: Exclude<keyof BookInput, 'authors' | 'readStatus' | 'shelfIds' | 'genreIds' | 'tagIds' | 'seriesId' | 'seriesNumber'>, label: string, numeric = false) {
     return <label className="field">{label}<input value={input[key]} inputMode={numeric ? 'numeric' : undefined} maxLength={key === 'personalNotes' ? 20000 : 1000} onChange={event => { setInput({ ...input, [key]: event.target.value }); setDirty(true); setDuplicates([]); }} /></label>;
@@ -63,7 +65,9 @@ export function BookEditor({ book, authorNames, onClose, onOpen }: { book?: Book
   }
   return <Sheet title={book ? 'עריכת ספר' : 'הוספת ספר'} onClose={onClose} busy={busy} dirty={dirty}>
     {dirtyCopyId && <p className="notice">יש שינוי בעותק. שמור את העותק לפני שמירה נוספת של הספר.</p>}
-    <CatalogPanel input={input} disabled={busy || !!dirtyCopyId} onApply={(draft, candidate, selected) => { setInput(draft); setDirty(true); setDuplicates([]); setCatalogSelections(old => [...old.map(item => ({ ...item, selected: item.selected.filter(field => !selected.includes(field) && !(field.startsWith('isbn') && selected.some(next => next.startsWith('isbn')))) })).filter(item => item.selected.length), { candidate, selected }]); }} />
+    <button type="button" className="secondary" disabled={busy || !!dirtyCopyId} onClick={() => setScanner(true)}>סריקת ברקוד או הקלדת מזהה</button>
+    {scanner && <Suspense fallback={<p role="status">טוען סורק…</p>}><BarcodeScanner onClose={() => setScanner(false)} onApply={(kind, value) => { setInput(old => ({ ...old, [kind]: value })); setDirty(true); setDuplicates([]); setBarcodeRevision(old => old + 1); setScanner(false); }} /></Suspense>}
+    <CatalogPanel key={barcodeRevision} autoOpen={barcodeRevision > 0} input={input} disabled={busy || !!dirtyCopyId} onApply={(draft, candidate, selected) => { setInput(draft); setDirty(true); setDuplicates([]); setCatalogSelections(old => [...old.map(item => ({ ...item, selected: item.selected.filter(field => !selected.includes(field) && !(field.startsWith('isbn') && selected.some(next => next.startsWith('isbn')))) })).filter(item => item.selected.length), { candidate, selected }]); }} />
     {book && <Provenance bookId={book.id} />}
     <form onSubmit={event => void save(event)}><fieldset disabled={busy || !!dirtyCopyId}><p className="hint">כל השדות לבחירה. אפשר לשמור ספר גם ללא שם ולמלא בהמשך.</p>
       <div className="cover-editor"><Thumbnail imageId={image === undefined ? book?.primaryImageId : null} image={image} /><label className="field">תמונת כריכה<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={event => { void upload(event.target.files?.[0]); event.target.value = ''; }} /></label><button type="button" className="secondary" onClick={() => { setImage(null); setDirty(true); }}>הסרת תמונה</button></div>

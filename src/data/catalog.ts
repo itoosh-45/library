@@ -8,7 +8,7 @@ export const emptyQuery: CatalogQuery = { title: '', author: '', publisher: '', 
 export type ProviderState = 'success' | 'empty' | 'timeout' | 'error' | 'rate-limited' | 'unavailable' | 'cancelled';
 export interface ProviderResult { provider: Provider; state: ProviderState; candidates: Candidate[]; message: string; cached?: boolean }
 export interface CatalogAdapter { provider: Provider; search(query: CatalogQuery, signal: AbortSignal): Promise<Candidate[]>; resolve?(candidate: Candidate, signal: AbortSignal): Promise<Candidate> }
-export class CatalogError extends Error { constructor(public state: ProviderState, public safeMessage: string) { super(safeMessage); } }
+export class CatalogError extends Error { constructor(public state: ProviderState, public safeMessage: string, public retryAfterMilliseconds?: number) { super(safeMessage); } }
 export function retryAfterMs(headers: Headers): number {
   const retry = headers.get('Retry-After'), milliseconds = retry && /^\d+$/.test(retry) ? +retry * 1000 : retry ? Date.parse(retry) - Date.now() : 60000;
   return Math.max(1000, Number.isFinite(milliseconds) ? milliseconds : 60000);
@@ -25,12 +25,13 @@ export function validateQuery(value: CatalogQuery): CatalogQuery {
 const quote = (value: string) => '"' + value.replace(/[\\"]/g, '\\$&') + '"';
 const string = (value: unknown): string | undefined => typeof value === 'string' && value.trim() && value.length <= 1000 ? value.trim() : undefined;
 const object = (value: unknown): Record<string, unknown> => { if (!value || typeof value !== 'object' || Array.isArray(value)) throw new CatalogError('error', 'הקטלוג החזיר נתונים לא תקינים.'); return value as Record<string, unknown>; };
-export async function readCatalogJson(response: Response): Promise<Record<string, unknown>> {
+export async function readCatalogValue(response: Response): Promise<unknown> {
   if (!response.body) throw new CatalogError('error', 'תגובת הקטלוג ריקה.');
   const reader = response.body.getReader(), decoder = new TextDecoder(); let length = 0, text = '';
-  try { for (;;) { const { done, value } = await reader.read(); if (done) break; length += value.byteLength; if (length > 2 * 1024 * 1024) throw new CatalogError('error', 'תגובת הקטלוג גדולה מדי.'); text += decoder.decode(value, { stream: true }); } return object(JSON.parse(text + decoder.decode())); }
+  try { for (;;) { const { done, value } = await reader.read(); if (done) break; length += value.byteLength; if (length > 2 * 1024 * 1024) throw new CatalogError('error', 'תגובת הקטלוג גדולה מדי.'); text += decoder.decode(value, { stream: true }); } return JSON.parse(text + decoder.decode()); }
   finally { await reader.cancel().catch(() => {}); }
 }
+export async function readCatalogJson(response: Response): Promise<Record<string, unknown>> { return object(await readCatalogValue(response)); }
 const stringList = (value: unknown): string[] => Array.isArray(value) ? value.slice(0, 20).map(string).filter((item): item is string => !!item) : [];
 const number = (value: unknown, max: number): number | undefined => typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= max ? value : undefined;
 async function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {

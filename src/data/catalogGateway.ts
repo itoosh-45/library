@@ -31,7 +31,7 @@ export function gatewayAdapter(provider: 'nli' | 'googlebooks', origin: string, 
     if (Date.now() < stoppedUntil) throw new CatalogError('rate-limited', 'הקטלוג ביקש להמתין לפני חיפוש נוסף.');
     const response = await fetcher(url.origin + '/catalog/search', { method: 'POST', credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, query }) });
     if (response.status === 429) stoppedUntil = Date.now() + retryAfterMs(response.headers);
-    if (!response.ok) throw new CatalogError(response.status === 429 ? 'rate-limited' : response.status === 503 ? 'unavailable' : 'error', response.status === 429 ? 'הקטלוג ביקש להמתין לפני חיפוש נוסף.' : 'החיבור לקטלוג אינו זמין כרגע.');
+    if (!response.ok) throw new CatalogError(response.status === 429 ? 'rate-limited' : response.status === 503 ? 'unavailable' : response.status === 504 ? 'timeout' : 'error', response.status === 429 ? 'הקטלוג ביקש להמתין לפני חיפוש נוסף.' : response.status === 504 ? 'הקטלוג לא ענה בזמן.' : 'החיבור לקטלוג אינו זמין כרגע.');
     const payload = await readCatalogJson(response); if (!Array.isArray(payload.candidates) || payload.candidates.length > 20) throw new CatalogError('error', 'תשובת הקטלוג אינה תקינה.');
     const candidates = payload.candidates.map(validateCandidate); if (candidates.some(row => row.provider !== provider)) throw new CatalogError('error', 'מקור התוצאה אינו תואם לקטלוג.'); return candidates;
   } };

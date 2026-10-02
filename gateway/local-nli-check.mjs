@@ -9,7 +9,14 @@ export function responseShape(value, secret) {
     if (++visited > 500 || depth > 8 || rows.length >= 100) return;
     if (Array.isArray(item)) { rows.push({ path, type: 'array', count: item.length }); if (item.length) visit(item[0], path + '[0]', depth + 1); }
     else if (item && typeof item === 'object') {
-      for (const [key, child] of Object.entries(item).slice(0, 30)) if (/^[a-zA-Z_:@0-9.-]{1,80}$/.test(key) && !key.includes(secret) && !/key|token|secret|url|link|href/i.test(key)) visit(child, path + '.' + key, depth + 1);
+      for (const [key, child] of Object.entries(item).slice(0, 30)) {
+        if (key.includes(secret)) continue;
+        let name = key;
+        if (/^https?:\/\//.test(key)) {
+          try { const uri = new URL(key); if (uri.username || uri.password || uri.search || uri.hash) continue; name = uri.pathname.split('/').filter(Boolean).at(-1) ?? ''; } catch { continue; }
+        }
+        if (/^[a-zA-Z_:@0-9.-]{1,80}$/.test(name) && !/key|token|secret|url|link|href/i.test(name)) visit(child, path + '.' + name, depth + 1);
+      }
     } else {
       const type = item === null ? 'null' : typeof item, row = { path, type };
       // Only fixed-query public bibliographic fields, never body/errors/credentials.
@@ -29,6 +36,16 @@ export function errorHeaderCodes(headers) {
     const value = headers.get('Errors'); if (!value || value.length > 5000) return [];
     const parsed = JSON.parse(value), rows = Array.isArray(parsed) ? parsed : parsed.Errors;
     return Array.isArray(rows) ? rows.slice(0, 10).flatMap(row => Number.isInteger(row?.code) && row.code >= 1000 && row.code <= 9999 ? [row.code] : []) : [];
+  } catch { return []; }
+}
+export function errorHeaderParameters(headers) {
+  try {
+    const value = headers.get('Errors'); if (!value || value.length > 5000) return [];
+    const parsed = JSON.parse(value), rows = Array.isArray(parsed) ? parsed : parsed.Errors;
+    return Array.isArray(rows) ? rows.slice(0, 10).flatMap(row => {
+      const match = typeof row?.description === 'string' && row.description.match(/"(material_type|availability_type|output_format|items_per_page|result_page|query|sort_field)"/);
+      return match ? [match[1]] : [];
+    }) : [];
   } catch { return []; }
 }
 export function createNliCheck({ fetcher = fetch, port = 4332 } = {}) {
@@ -54,7 +71,7 @@ export function createNliCheck({ fetcher = fetch, port = 4332 } = {}) {
       const url = new URL('https://api.nli.org.il/openlibrary/search');
       for (const [key, value] of Object.entries({ api_key: secret, query: 'title,exact,Jerusalem', output_format: 'json', items_per_page: '2', result_page: '1', material_type: 'books' })) url.searchParams.set(key, value);
       const response = await fetcher(url, { redirect: 'error', signal: AbortSignal.timeout(12000) });
-      const diagnostics = { hasErrorsHeader: response.headers.has('Errors'), errorCodes: errorHeaderCodes(response.headers) };
+      const diagnostics = { hasErrorsHeader: response.headers.has('Errors'), errorCodes: errorHeaderCodes(response.headers), ignoredParameters: errorHeaderParameters(response.headers) };
       if (!response.ok) { await response.body?.cancel(); result = { state: response.status === 429 ? 'rate-limited' : 'provider-error', httpStatus: response.status, diagnostics }; }
       else result = { state: 'received', httpStatus: response.status, diagnostics, shape: responseShape(await boundedJson(response), secret) };
     } catch { result = { state: 'not-completed' }; }

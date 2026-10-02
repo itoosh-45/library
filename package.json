@@ -13,9 +13,11 @@
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
     "test:gateway": "node --test gateway/local-nli-check.test.mjs",
+    "build:gateway": "vite build --config vite.config.gateway.ts",
+    "start:gateway": "node .gateway-dist/run.js",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4331 --strictPort",
-    "check": "npm run typecheck && npm run lint && npm test && npm run test:gateway && npm run build",
+    "check": "npm run typecheck && npm run lint && npm test && npm run test:gateway && npm run build && npm run build:gateway",
     "test:browser": "playwright test"
   },
   "dependencies": {

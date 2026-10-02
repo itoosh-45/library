@@ -1,19 +1,22 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createNliCheck, responseShape, boundedJson, errorHeaderCodes } from './local-nli-check.mjs';
+import { createNliCheck, responseShape, boundedJson, errorHeaderCodes, errorHeaderParameters } from './local-nli-check.mjs';
 
 test('T24 probe emits public bibliographic shape only and excludes secret/error/url fields', () => {
   const secret = 'SECRET_CANARY_123456';
   const shape = responseShape({ records: [{ title: 'Jerusalem', api_key: secret, error: secret, publisher: secret, url: 'https://example.test/?key=' + secret, [secret]: 'hidden' }] }, secret);
   assert(!JSON.stringify(shape).includes(secret)); assert(!JSON.stringify(shape).includes('https://')); assert(shape.some(row => row.sample === 'Jerusalem'));
+  const linked = responseShape([{ 'http://purl.org/dc/elements/1.1/title': 'Jerusalem', ['http://purl.org/' + secret]: 'hidden' }], secret);
+  assert(linked.some(row => row.path === '$[0].title' && row.sample === 'Jerusalem')); assert(!JSON.stringify(linked).includes(secret));
 });
 test('T24 bounded response rejects oversized data', async () => { await assert.rejects(boundedJson(new Response('x'.repeat(100)), 10)); });
 test('NLI documented Errors header retains numeric codes without logging provider messages or keys', () => {
   const codes = errorHeaderCodes(new Headers({ Errors: JSON.stringify({ Errors: [{ code: 1010, description: 'SECRET_CANARY_123456' }, { code: 'secret' }] }) }));
   assert.deepEqual(codes, [1010]); assert.deepEqual(errorHeaderCodes(new Headers({ Errors: 'invalid-json' })), []);
+  assert.deepEqual(errorHeaderParameters(new Headers({ Errors: JSON.stringify({ Errors: [{ code: 1010, description: '"material_type" invalid SECRET-CANARY' }] }) })), ['material_type']);
 });
 test('T24 local probe requires origin+nonce, calls only fixed NLI public query, refuses rapid repeat and safely handles failures', async () => {
-  const secret = 'SECRET_CANARY_123456', calls = [], port = 4333;
+  const secret = 'SECRET_CANARY_123456', calls = [], port = 4334;
   const server = createNliCheck({ port, fetcher: async (url, options) => { calls.push({ url, options }); return new Response(JSON.stringify({ records: [{ title: 'Jerusalem', creator: 'Public author', secret }] })); } });
   await new Promise(resolve => server.listen(port, '127.0.0.1', resolve));
   try {

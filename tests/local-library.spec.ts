@@ -43,7 +43,7 @@ test('real IndexedDB atomic writes, rollback, relation checks and cross-window v
   });
   expect(results).toMatchObject({ relationRejected: true, rollbackRejected: true, books: 1, copies: 2, link: true, stores: 15 });
   await expect(page.getByRole('heading', { name: 'ספר בדיקה', exact: true })).toBeVisible();
-  await expect(page.getByText('2 עותקים')).toBeVisible();
+  await expect(page.getByText('2 עותקים', { exact: true })).toBeVisible();
   await page.reload(); await expect(page.getByRole('heading', { name: 'ספר בדיקה', exact: true })).toBeVisible();
   const next = await context.newPage(); await next.goto('');
   await expect(next.getByRole('heading', { name: 'ספר בדיקה', exact: true })).toBeVisible();

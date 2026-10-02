@@ -40,7 +40,7 @@ test('optional book, multiple authors, three copies, editing, archive, narrow la
   await page.getByRole('button', { name: 'החזרת העותק מהארכיון' }).first().click();
   await page.getByRole('button', { name: 'סגירה', exact: true }).click(); await page.reload();
   await expect(page.getByText('שם עט מלא · מחבר נוסף')).toBeVisible();
-  await expect(page.getByText('1 עותקים')).toBeVisible();
+  await expect(page.getByText('1 עותקים', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'תצוגה מורחבת' }).click(); await page.reload();
   await expect(page.getByRole('button', { name: 'תצוגה מצומצמת' })).toBeVisible();
 });
@@ -53,7 +53,7 @@ test('ISBN duplicate decision, unsaved dismissal and stale window edit are safe'
   await page.getByText('פרטים נוספים', { exact: true }).click(); await page.getByLabel('ISBN', { exact: true }).fill('0306406152');
   await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'ISBN זה כבר נמצא בספרייה' })).toBeVisible();
-  await page.getByRole('button', { name: 'הוספת עותק לספר הקיים' }).click(); await expect(page.getByText('2 עותקים')).toBeVisible();
+  await page.getByRole('button', { name: 'הוספת עותק לספר הקיים' }).click(); await expect(page.getByText('2 עותקים', { exact: true })).toBeVisible();
   await expect(page.locator('.book-list li')).toHaveCount(1);
   await page.getByRole('button', { name: /ספר ISBN.*2 עותקים/ }).click();
   await page.getByLabel('שם הספר', { exact: true }).fill('לא יישמר'); await page.keyboard.press('Escape');

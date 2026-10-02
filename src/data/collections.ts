@@ -1,6 +1,7 @@
 import type { LibraryDatabase } from './database';
 import type { Book, BookShelf, NamedItem, Series, Shelf, StoredImage } from './models';
 import { LibraryValidationError, normalizeText } from './library';
+import { compareTitle } from './search';
 
 export type CollectionKind = 'tags' | 'genres' | 'series';
 export const collectionLabels = { tags: 'תגיות', genres: 'ז׳אנרים', series: 'סדרות' };
@@ -99,10 +100,10 @@ export async function setSeriesCollapsed(database: LibraryDatabase, id: string, 
     await database.series.update(id, { collapsed });
   });
 }
-export function bookGroups(books: Book[], series: Series[]): { id: string; series?: Series; books: Book[] }[] {
-  const byTitle = (a: Book, b: Book) => a.titleSortKey.localeCompare(b.titleSortKey, 'he') || a.id.localeCompare(b.id);
+export function bookGroups(books: Book[], series: Series[], compare?: (a: Book, b: Book) => number): { id: string; series?: Series; books: Book[] }[] {
+  const byTitle = compareTitle;
   const groups = new Map<string, { id: string; series?: Series; books: Book[] }>();
-  for (const book of [...books].sort(byTitle)) {
+  for (const book of [...books].sort(compare ?? byTitle)) {
     const item = series.find(item => item.id === book.seriesId), id = item ? 'series:' + item.id : 'book:' + book.id;
     if (!groups.has(id)) groups.set(id, { id, series: item, books: [] });
     groups.get(id)!.books.push(book);

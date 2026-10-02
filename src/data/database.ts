@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import { beginWrite } from '../updateSafety';
 import type { Author, Book, BookShelf, Copy, Loan, MetadataCache, MetadataSource, NamedItem, Person, RecognitionDraft, Series, Setting, SettingKey, Shelf, StoredImage } from './models';
 
 // IndexedDB is scoped by origin. This name keeps other Pages apps separate.
@@ -12,6 +13,16 @@ export class LibraryDatabase extends Dexie {
   metadataCache!: Table<MetadataCache, string>; recognitionDrafts!: Table<RecognitionDraft, string>;
   constructor(name = DATABASE_NAME) {
     super(name);
+    this.use({ stack: 'dbcore', name: 'update-write-guard', create: core => ({ ...core, transaction(stores, mode, options) {
+      const transaction = core.transaction(stores, mode, options);
+      if (mode === 'readwrite') {
+        const end = beginWrite();
+        // Dexie's IndexedDB core returns the native transaction (its public core type only exposes abort).
+        const native = transaction as IDBTransaction;
+        native.addEventListener('complete', end); native.addEventListener('abort', end);
+      }
+      return transaction;
+    } }) });
     this.version(1).stores({
       books: 'id,updatedAt,createdAt,titleSortKey,publisher,publicationYear,seriesId,readStatus,isbn13,isbn10,danacode,*authorIds,*tagIds,*genreIds',
       copies: 'id,bookId', authors: 'id,normalizedName', shelves: 'id,parentId',

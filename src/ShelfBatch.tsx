@@ -1,3 +1,4 @@
+import { useOnline } from './pwa';
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Sheet } from './Sheet';
@@ -32,6 +33,7 @@ function SourcePreview({ imageId, storedImageId, queue, crop }: { imageId: strin
   return blob ? <><img ref={ref} className="vision-prepared" alt={crop ? 'אזור הספר בתמונת המדף' : 'מקור תמונת המדף לבדיקה'} />{message && <p role="status">{message}</p>}</> : <p className="hint">מקור התמונה אינו זמין אחרי סגירה אם לא בחרת לשמור אותו.</p>;
 }
 export default function ShelfBatch({ onClose }: { onClose(): void }) {
+  const online = useOnline();
   const [queue] = useState(() => new ShelfQueue(db, personalVisionSession));
   const [draftId, setDraftId] = useState<string>(), [shelfId, setShelfId] = useState(''), [keepSource, setKeepSource] = useState(false);
   const [busy, setBusy] = useState(false), [ready, setReady] = useState(personalVisionSession.ready), [message, setMessage] = useState('');
@@ -69,7 +71,7 @@ export default function ShelfBatch({ onClose }: { onClose(): void }) {
           <label className="field">הוספת תמונות מדף<input type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={event => { void add(event.target.files); event.target.value = ''; }} /></label>
           <label className="field">צילום תמונת מדף<input type="file" accept="image/*" capture="environment" onChange={event => { void add(event.target.files); event.target.value = ''; }} /></label>
         </fieldset>
-        <div className="actions"><button type="button" disabled={!ready || busy || queue.active || draft.status === 'running' || draft.status === 'quota' || !draft.images.some(image => image.status === 'pending')} onClick={() => void action(async () => { await queue.start(draft.id, () => setMessage('המודל הראשי אינו זמין; מנסה פעם אחת את המודל החלופי שאושר.')); })}>התחלת או חידוש התור</button>
+        <div className="actions"><button type="button" disabled={!ready || !online || busy || queue.active || draft.status === 'running' || draft.status === 'quota' || !draft.images.some(image => image.status === 'pending')} onClick={() => void action(async () => { if (!navigator.onLine) return; await queue.start(draft.id, () => setMessage('המודל הראשי אינו זמין; מנסה פעם אחת את המודל החלופי שאושר.')); })}>התחלת או חידוש התור</button>
           <button type="button" className="secondary" disabled={draft.status !== 'running'} onClick={() => void queue.pause(draft.id).catch(error => setMessage(errorMessage(error)))}>השהיית התור</button></div>
         {draft.status === 'quota' && <p role="alert">המכסה הסתיימה. הטיוטה נשמרה; אין תשלום, חידוש או ניסיון נוסף.</p>}
         <ol className="shelf-queue">{draft.images.map((image, index) => <li key={image.id}><h4>{index + 1}. <bdi>{image.name}</bdi></h4><p>{imageLabels[image.status]}{image.storedImageId ? ' · מקור נשמר במכשיר' : ' · מקור אינו שמור'}</p>{image.message && <p className="hint">{image.message}</p>}

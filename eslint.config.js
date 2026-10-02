@@ -10,5 +10,7 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   { files: ['**/*.{ts,tsx}'], languageOptions: { globals: { ...globals.browser, ...globals.node } } },
   { files: ['gateway/**/*.mjs'], languageOptions: { globals: globals.node } },
+  { files: ['service-worker.js'], languageOptions: { globals: globals.serviceworker } },
+  { files: ['tests/pwa/*.mjs'], languageOptions: { globals: globals.node } },
   { files: ['**/*.tsx'], plugins: { 'react-hooks': hooks, 'react-refresh': refresh }, rules: { ...hooks.configs.recommended.rules, 'react-refresh/only-export-components': ['warn', { allowConstantExport: true }] } },
 );

@@ -1,7 +1,7 @@
 import type { MetadataField, MetadataSource } from './models';
 import { LibraryValidationError } from './library';
 import { comparableISBN, parseISBN } from './books';
-import { recognitionModels, recognitionVersion, recognitionValues, validateRecognition } from './recognition';
+import { recognitionModels, recognitionVersion, recognitionValues, shelfRecognitionVersion, validateRecognition } from './recognition';
 
 export const metadataFields: MetadataField[] = ['title', 'subtitle', 'authors', 'isbn10', 'isbn13', 'danacode', 'publisher', 'publicationYear', 'edition', 'volume', 'language', 'pages'];
 export const providerNames = { openlibrary: 'Open Library', googlebooks: 'Google Books', nli: 'הספרייה הלאומית' } as const;
@@ -47,7 +47,9 @@ export function validateMetadataSource(value: unknown): MetadataSource {
   const fields = validateFieldValues(row.fieldValues);
   if (vision) {
     const evidence = record(row.recognition);
-    if (Object.keys(evidence).length !== 4 || Object.keys(evidence).some(key => !['version', 'model', 'imageHash', 'item'].includes(key)) || evidence.version !== recognitionVersion || !Object.values(recognitionModels).includes(evidence.model as never) || typeof evidence.imageHash !== 'string' || !/^[a-f0-9]{64}$/.test(evidence.imageHash) || row.sourceUrl !== null || row.recordId !== `${evidence.model}/${evidence.version}/${evidence.imageHash}`) return fail();
+    const batch = evidence.version === shelfRecognitionVersion, evidenceKeys = ['version', 'model', 'imageHash', 'item', ...(batch ? ['batchId', 'itemId'] : [])];
+    const uuid = (value: unknown) => typeof value === 'string' && /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(value);
+    if (Object.keys(evidence).length !== evidenceKeys.length || Object.keys(evidence).some(key => !evidenceKeys.includes(key)) || (!batch && evidence.version !== recognitionVersion) || (batch && (!uuid(evidence.batchId) || !uuid(evidence.itemId))) || !Object.values(recognitionModels).includes(evidence.model as never) || typeof evidence.imageHash !== 'string' || !/^[a-f0-9]{64}$/.test(evidence.imageHash) || row.sourceUrl !== null || row.recordId !== `${evidence.model}/${evidence.version}/${evidence.imageHash}${batch ? '/' + evidence.itemId : ''}`) return fail();
     const item = validateRecognition({ items: [evidence.item] }).items[0], expected = recognitionValues(item);
     if (Object.keys(expected).length !== Object.keys(fields).length || metadataFields.some(field => JSON.stringify(expected[field]) !== JSON.stringify(fields[field]))) return fail();
   } else if (!matchesProvider(row.provider as Provider, row.sourceUrl)) return fail();
@@ -56,6 +58,6 @@ export function validateMetadataSource(value: unknown): MetadataSource {
     if (!Array.isArray(selected) || selected.length > metadataFields.length || new Set(selected).size !== selected.length || selected.some(field => !metadataFields.includes(field) || !Object.hasOwn(fields, field) || fields[field as MetadataField] == null)) return fail();
   }
   if ((row.userOverriddenFields as MetadataField[]).some(field => !(row.selectedFields as MetadataField[]).includes(field))) return fail();
-  if (!(row.selectedFields as MetadataField[]).length) return fail();
+  if (!(row.selectedFields as MetadataField[]).length && !(vision && (row.recognition as MetadataSource['recognition'])?.version === shelfRecognitionVersion)) return fail();
   return row as unknown as MetadataSource;
 }

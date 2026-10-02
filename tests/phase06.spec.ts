@@ -34,7 +34,7 @@ test('T13 global live search, cumulative filters, series in every sort, original
   await page.getByText('סטטיסטיקה', { exact: true }).click(); await expect(page.locator('.statistics')).toContainText('נקרא: 1'); await expect(page.locator('.statistics')).toContainText('חוֹרף: 1');
   const backup = await page.evaluate(async () => { const dbPath = '/library/src/data/database.ts', path = '/library/src/data/backup.ts'; const { db } = await import(/* @vite-ignore */ dbPath), { createSnapshot } = await import(/* @vite-ignore */ path); return JSON.parse((await createSnapshot(db)).text); });
   await test.info().attach('synthetic-backup', { body: JSON.stringify(backup), contentType: 'application/json' });
-  expect(backup.version).toBe(6); expect(backup.data.books.find((book: { id: string }) => book.id === ids.targetId).title).toBe('תָּמָר ״סוף״'); expect(errors).toEqual([]);
+  expect(backup.version).toBe(7); expect(backup.data.books.find((book: { id: string }) => book.id === ids.targetId).title).toBe('תָּמָר ״סוף״'); expect(errors).toEqual([]);
 });
 test('T13 letter jumps open the first matching series, retain grouping and restore scroll/search after editing at desktop and 360px', async ({ page }) => {
   await page.goto(''); await expect(page.getByRole('heading', { name: /כל הספרים/ })).toBeVisible(); await seed(page);

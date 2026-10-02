@@ -66,7 +66,7 @@ it('T18 protected draft backup restores source, stable IDs and prior results; re
   const database = await library(), shelf = await saveShelf(database, { name: 'מדף דמה', parentId: null }), draft = await createDraft(database, shelf.id), savedSource = await source();
   await appendDraftImage(database, draft.id, 'synthetic.jpg', 'a'.repeat(64), savedSource);
   const queue = new ShelfQueue(database, new VisionSession(), async () => result()); await queue.start(draft.id);
-  const snapshot = await createSnapshot(database), backup = await validateBackup(snapshot.text); expect(JSON.parse(snapshot.text).version).toBe(6); expect(backup.counts.recognitionDrafts).toBe(1); expect(backup.data.recognitionDrafts[0].items).toHaveLength(1);
+  const snapshot = await createSnapshot(database), backup = await validateBackup(snapshot.text); expect(JSON.parse(snapshot.text).version).toBe(7); expect(backup.counts.recognitionDrafts).toBe(1); expect(backup.data.recognitionDrafts[0].items).toHaveLength(1);
   await restoreSnapshot(database, backup, snapshot.fingerprint); expect((await database.recognitionDrafts.get(draft.id))!.items[0].id).toBe(backup.data.recognitionDrafts[0].items[0].id); expect((await database.images.get(savedSource.id))!.blob.size).toBe(savedSource.blob.size);
   await removeDraftSource(database, draft.id, backup.data.recognitionDrafts[0].images[0].id); expect(await database.images.count()).toBe(0); expect((await database.recognitionDrafts.get(draft.id))!.items).toHaveLength(1);
   await deleteShelf(database, shelf); expect((await database.recognitionDrafts.get(draft.id))!.shelfId).toBeNull(); await createSnapshot(database);

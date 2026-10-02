@@ -5,6 +5,8 @@ import { recognitionFields, recognitionModels, shelfRecognitionVersion, validate
 import { hashBytes, jpegDimensions } from './images';
 import { loadVisionImage, prepareVisionImage } from './visionImage';
 import { VisionError, VisionSession, type VisionOutcome } from './vision';
+import { validateReview } from './draftReviewValues';
+import { recognitionMetadataFields } from './recognition';
 
 const fail = (message = 'טיוטת המדף אינה תקינה.'): never => { throw new LibraryValidationError(message); };
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(value);
@@ -28,11 +30,18 @@ export function validateDraft(value: unknown): RecognitionDraft {
   }
   if ((row.images as DraftImage[]).filter(image => image.status === 'processing').length > 1) return fail();
   for (const value of row.items) {
-    const item = exact(value, ['id', 'imageId', 'item', 'model', 'fetchedAt', 'status', 'selectedFields', 'bookId', 'copyId']);
+    const item = exact(value, ['id', 'imageId', 'item', 'model', 'fetchedAt', 'status', 'selectedFields', 'bookId', 'copyId', ...(value && typeof value === 'object' && Object.hasOwn(value, 'review') ? ['review'] : [])]);
     if (!uuid(item.id) || itemIds.has(item.id) || !imageIds.has(item.imageId as string) || !(row.images as DraftImage[]).some(image => image.id === item.imageId && image.status === 'recognized') || !Object.values(recognitionModels).includes(item.model as never) || !date(item.fetchedAt) || !['detected', 'reviewed', 'approved', 'saved', 'removed'].includes(item.status as string) || !Array.isArray(item.selectedFields) || new Set(item.selectedFields).size !== item.selectedFields.length || item.selectedFields.some(field => !recognitionFields.includes(field)) || (item.bookId !== null && !uuid(item.bookId)) || (item.copyId !== null && !uuid(item.copyId)) || (item.status === 'saved' ? !item.bookId || !item.copyId : item.bookId !== null || item.copyId !== null)) return fail();
     const checked = validateRecognition({ items: [item.item] }).items[0];
-    if (JSON.stringify(checked) !== JSON.stringify(item.item)) return fail();
+    const original = item.item as typeof checked;
+    if (Object.keys(checked).filter(key => key !== 'evidenceByField').some(key => JSON.stringify(checked[key as keyof typeof checked]) !== JSON.stringify(original[key as keyof typeof checked])) || recognitionFields.some(field => JSON.stringify(checked.evidenceByField[field]) !== JSON.stringify(original.evidenceByField[field]))) return fail();
     if (item.selectedFields.some(field => field === 'authors' ? !checked.authors.length : !checked[field as keyof typeof checked])) return fail();
+    if (item.review !== undefined) {
+      const review = validateReview(item.review), fromImage = recognitionMetadataFields(checked, item.selectedFields as DraftItem['selectedFields']);
+      const group = (field: string) => field.startsWith('isbn') ? 'isbn' : field;
+      if (review.catalogs.some(selection => selection.selected.some(field => fromImage.some(other => group(other) === group(field))))) return fail();
+      if (['approved', 'saved'].includes(item.status as string) && review.decision === null) return fail();
+    } else if (item.status === 'approved' || item.status === 'saved') return fail();
     itemIds.add(item.id);
   }
   return structuredClone(row) as unknown as RecognitionDraft;

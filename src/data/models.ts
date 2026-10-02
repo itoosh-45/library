@@ -24,7 +24,7 @@ export interface StoredImage { id: string; blob: Blob; mimeType: string; width: 
 export type SettingKey = 'libraryId' | 'libraryName' | 'displayMode' | 'preferredModel' | 'lastBackupAt';
 export interface Setting { key: SettingKey; value: string }
 export type MetadataField = 'title' | 'subtitle' | 'authors' | 'isbn10' | 'isbn13' | 'danacode' | 'publisher' | 'publicationYear' | 'edition' | 'volume' | 'language' | 'pages';
-export interface MetadataSource { id: string; bookId: string; provider: string; recordId: string; sourceUrl: string | null; fetchedAt: string; fieldValues: Partial<Record<MetadataField, string | number | string[] | null>>; selectedFields: MetadataField[]; userOverriddenFields: MetadataField[]; recognition?: { version: string; model: string; imageHash: string; item: import('./recognition').RecognizedBook } }
+export interface MetadataSource { id: string; bookId: string; provider: string; recordId: string; sourceUrl: string | null; fetchedAt: string; fieldValues: Partial<Record<MetadataField, string | number | string[] | null>>; selectedFields: MetadataField[]; userOverriddenFields: MetadataField[]; recognition?: { version: string; model: string; imageHash: string; item: import('./recognition').RecognizedBook; batchId?: string; itemId?: string } }
 export interface MetadataCache { key: string; provider: string; fetchedAt: string; expiresAt: string; minimalPayload: MetadataSource['fieldValues'][]; candidates?: { provider: string; recordId: string; sourceUrl: string | null; fetchedAt: string; kind: 'work' | 'edition' | 'volume'; fields: MetadataSource['fieldValues']; warnings: string[] }[] }
 export interface DraftImage {
   id: string; name: string; inputHash: string; storedImageId: string | null; preparedHash: string | null;
@@ -36,6 +36,11 @@ export interface DraftItem {
   status: 'detected' | 'reviewed' | 'approved' | 'saved' | 'removed';
   selectedFields: import('./recognition').RecognitionField[];
   bookId: string | null; copyId: string | null;
+  review?: DraftReview;
+}
+export interface DraftReview {
+  input: import('./books').BookInput; catalogs: import('./catalogSave').CatalogSelection[];
+  decision: 'new' | 'copy' | null; targetBookId: string | null; targetRevision: number | null; allowDuplicate: boolean;
 }
 export interface RecognitionDraft {
   id: string; batchId: string; version: 'shelf-v1'; shelfId: string | null; images: DraftImage[]; items: DraftItem[];

@@ -3,6 +3,7 @@ import { LibraryValidationError } from './library';
 import type { BookInput } from './books';
 
 export const recognitionVersion = 'single-book-v1';
+export const shelfRecognitionVersion = 'shelf-v1';
 export const recognitionModels = { primary: 'gemini-3.8-flash', backup: 'gemini-3.7-flash' } as const;
 export const recognitionFields = ['title', 'authors', 'isbn', 'danacode', 'publisher'] as const;
 export type RecognitionField = typeof recognitionFields[number];
@@ -73,3 +74,13 @@ export const recognitionSchema = {
     },
   } } },
 };
+
+// One image per request keeps imageIndex unambiguous; the local draft owns stable image/item IDs.
+export function validateShelfRecognition(value: unknown): RecognitionResult {
+  const root = object(value); exactKeys(root, ['items']);
+  if (!Array.isArray(root.items) || root.items.length > 40) return invalid();
+  return { items: root.items.map(item => validateRecognition({ items: [item] }).items[0]) };
+}
+export const shelfRecognitionPrompt = recognitionPrompt.replace('Extract exactly one visible book,', 'Extract separate visible books from this shelf image, up to 40 items,')
+  + ' Preserve separate copies and similar volumes. Never deduplicate books. Give each item its own visibleText, evidence and bbox; if its location is unclear use bbox=null and report uncertainty. Never claim complete coverage of the shelf.';
+export const shelfRecognitionSchema = { ...recognitionSchema, properties: { items: { ...recognitionSchema.properties.items, maxItems: 40 } } };

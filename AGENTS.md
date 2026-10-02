@@ -21,7 +21,7 @@ The product is a personal Hebrew/RTL library app. Follow the approved project pl
 
 ## Work and validation
 
-Stage 9 scanner and stage 10 single-book vision are built locally in App 0.8.0, database schema 2, JSON backup v5 (reads v1–v5). Image preparation, memory-only personal key, explicit no-charge verification and consent, selected draft fields and atomic source evidence are implemented. See docs/phase-09-progress.md and docs/phase-10-progress.md. Gemini tests are mocked. The user reported checking their Gemini project is Free with no active billing; real recognition accuracy and physical phone checks remain NOT RUN. Stage 11 is the next independent implementation step; cycle 5 is not complete without its missing evidence.
+Stage 9 scanner, stage 10 single-book vision and stage 11 shelf queue are built locally in App 0.9.0, database schema 2, JSON backup v6 (reads v1–v6). Image preparation, memory-only personal key, no-charge verification and consent, selected single-book draft fields, atomic source evidence and a resumable serial shelf queue are implemented. Shelf results are persistent drafts; saving approved shelf items is stage 12. See docs/phase-09-progress.md, docs/phase-10-progress.md and docs/phase-11-progress.md. Gemini tests are mocked. The user reported checking their Gemini project is Free with no active billing; actual recognition accuracy and physical phone checks remain NOT RUN. Stage 12 is the next independent implementation step; cycles 5–6 are not complete without missing evidence.
 
 Use npm run check and npm run test:browser as appropriate. Run targeted checks for changed behavior. Synthetic fixtures, desktop browsers and CI do not establish live provider accuracy, physical phone behavior or deployment success.
 

@@ -1,19 +1,21 @@
 import type { LibraryDatabase } from './database';
-import type { Author, Book, BookShelf, Copy, Loan, MetadataSource, NamedItem, Person, Series, Setting, Shelf, StoredImage } from './models';
+import type { Author, Book, BookShelf, Copy, Loan, MetadataSource, NamedItem, Person, RecognitionDraft, Series, Setting, Shelf, StoredImage } from './models';
 import { LibraryValidationError, normalizeText } from './library';
 import { hashBytes, jpegDimensions } from './images';
 import { parseISBN, readingStates } from './books';
 import { validDay } from './loans';
 import { validateMetadataSource } from './metadata';
+import { validateDraft } from './shelfDraft';
 
-interface Core { books: Book[]; copies: Copy[]; authors: Author[]; settings: Setting[]; images: StoredImage[]; shelves: Shelf[]; bookShelves: BookShelf[]; series: Series[]; genres: NamedItem[]; tags: NamedItem[]; people: Person[]; loans: Loan[]; metadataSources: MetadataSource[] }
+interface Core { books: Book[]; copies: Copy[]; authors: Author[]; settings: Setting[]; images: StoredImage[]; shelves: Shelf[]; bookShelves: BookShelf[]; series: Series[]; genres: NamedItem[]; tags: NamedItem[]; people: Person[]; loans: Loan[]; metadataSources: MetadataSource[]; recognitionDrafts: RecognitionDraft[] }
 type ImageJSON = Omit<StoredImage, 'blob'> & { base64: string };
 type Payload = Omit<Core, 'images'> & { images: ImageJSON[] };
-interface Backup { format: 'personal-library-basic'; version: 5; schemaVersion: 2; appVersion: string; libraryId: string; exportedAt: string; counts: Record<keyof Core, number>; checksum: string; data: Payload }
+interface Backup { format: 'personal-library-basic'; version: 6; schemaVersion: 2; appVersion: string; libraryId: string; exportedAt: string; counts: Record<keyof Core, number>; checksum: string; data: Payload }
 export interface Snapshot { text: string; fingerprint: string; counts: Backup['counts'] }
 export interface ValidatedBackup { data: Core; counts: Backup['counts']; libraryName: string }
-const coreKeys = ['books', 'copies', 'authors', 'settings', 'images', 'shelves', 'bookShelves', 'series', 'genres', 'tags', 'people', 'loans', 'metadataSources'] as const;
-const version3Keys = coreKeys.filter(key => key !== 'metadataSources');
+const coreKeys = ['books', 'copies', 'authors', 'settings', 'images', 'shelves', 'bookShelves', 'series', 'genres', 'tags', 'people', 'loans', 'metadataSources', 'recognitionDrafts'] as const;
+const version5Keys = coreKeys.filter(key => key !== 'recognitionDrafts');
+const version3Keys = version5Keys.filter(key => key !== 'metadataSources');
 const version2Keys = version3Keys.filter(key => key !== 'people' && key !== 'loans');
 const legacyKeys = ['books', 'copies', 'authors', 'settings', 'images'];
 const bad = (message = 'קובץ הגיבוי אינו תקין או מכיל שדות שאינם נתמכים.'): never => { throw new LibraryValidationError(message); };
@@ -37,7 +39,7 @@ function canonical(core: Core): string {
   return JSON.stringify({ ...core, images: core.images.map(image => ({ ...image, blob: undefined })) });
 }
 async function readCore(database: LibraryDatabase): Promise<Core> {
-  return { books: await database.books.toArray(), copies: await database.copies.toArray(), authors: await database.authors.toArray(), settings: await database.settings.toArray(), images: await database.images.toArray(), shelves: await database.shelves.toArray(), bookShelves: await database.bookShelves.toArray(), series: await database.series.toArray(), genres: await database.genres.toArray(), tags: await database.tags.toArray(), people: await database.people.toArray(), loans: await database.loans.toArray(), metadataSources: await database.metadataSources.toArray() };
+  return { books: await database.books.toArray(), copies: await database.copies.toArray(), authors: await database.authors.toArray(), settings: await database.settings.toArray(), images: await database.images.toArray(), shelves: await database.shelves.toArray(), bookShelves: await database.bookShelves.toArray(), series: await database.series.toArray(), genres: await database.genres.toArray(), tags: await database.tags.toArray(), people: await database.people.toArray(), loans: await database.loans.toArray(), metadataSources: await database.metadataSources.toArray(), recognitionDrafts: await database.recognitionDrafts.toArray() };
 }
 const countsOf = (core: Core): Backup['counts'] => Object.fromEntries(coreKeys.map(key => [key, core[key].length])) as Backup['counts'];
 const encode = (bytes: Uint8Array): string => {
@@ -46,7 +48,7 @@ const encode = (bytes: Uint8Array): string => {
 };
 async function envelope(core: Core): Promise<Backup> {
   const data: Payload = { ...core, images: await Promise.all(core.images.map(async ({ blob, ...image }) => ({ ...image, base64: encode(new Uint8Array(await blob.arrayBuffer())) }))) };
-  return { format: 'personal-library-basic', version: 5, schemaVersion: 2, appVersion: '0.8.0', libraryId: core.settings.find(setting => setting.key === 'libraryId')!.value, exportedAt: new Date().toISOString(), counts: countsOf(core), checksum: await hashBytes(new TextEncoder().encode(JSON.stringify(data)).buffer), data };
+  return { format: 'personal-library-basic', version: 6, schemaVersion: 2, appVersion: '0.9.0', libraryId: core.settings.find(setting => setting.key === 'libraryId')!.value, exportedAt: new Date().toISOString(), counts: countsOf(core), checksum: await hashBytes(new TextEncoder().encode(JSON.stringify(data)).buffer), data };
 }
 export async function createSnapshot(database: LibraryDatabase): Promise<Snapshot> {
   const core = await database.transaction('r', database.tables, () => readCore(database));
@@ -62,12 +64,14 @@ export async function validateBackup(source: string): Promise<ValidatedBackup> {
   const legacy = root.version === 1 && root.schemaVersion === 1;
   const version2 = root.version === 2 && root.schemaVersion === 2;
   const version3 = root.version === 3 && root.schemaVersion === 2;
-  if (root.format !== 'personal-library-basic' || (!legacy && !version2 && !version3 && (![4, 5].includes(root.version as number) || root.schemaVersion !== 2))) return bad('פורמט או גרסת הגיבוי אינם נתמכים. הספרייה לא שונתה.');
+  const version5 = [4, 5].includes(root.version as number) && root.schemaVersion === 2;
+  if (root.format !== 'personal-library-basic' || (!legacy && !version2 && !version3 && !version5 && (root.version !== 6 || root.schemaVersion !== 2))) return bad('פורמט או גרסת הגיבוי אינם נתמכים. הספרייה לא שונתה.');
   if (!text(root.appVersion, 100) || !uuid(root.libraryId) || !date(root.exportedAt) || !text(root.checksum, 64)) return bad();
-  const data = exact(root.data, legacy ? legacyKeys : version2 ? version2Keys : version3 ? version3Keys : [...coreKeys]);
+  const keys = legacy ? legacyKeys : version2 ? version2Keys : version3 ? version3Keys : version5 ? version5Keys : [...coreKeys];
+  const data = exact(root.data, keys);
   for (const key of Object.keys(data)) if (!Array.isArray(data[key]) || (data[key] as unknown[]).length > 20000) return bad();
   if (await hashBytes(new TextEncoder().encode(JSON.stringify(data)).buffer) !== root.checksum) return bad('בדיקת שלמות הגיבוי נכשלה. הספרייה לא שונתה.');
-  const payload = (legacy ? { ...data, shelves: [], bookShelves: [], series: [], genres: [], tags: [], people: [], loans: [], metadataSources: [] } : version2 ? { ...data, people: [], loans: [], metadataSources: [] } : version3 ? { ...data, metadataSources: [] } : data) as unknown as Payload;
+  const payload = (legacy ? { ...data, shelves: [], bookShelves: [], series: [], genres: [], tags: [], people: [], loans: [], metadataSources: [], recognitionDrafts: [] } : version2 ? { ...data, people: [], loans: [], metadataSources: [], recognitionDrafts: [] } : version3 ? { ...data, metadataSources: [], recognitionDrafts: [] } : version5 ? { ...data, recognitionDrafts: [] } : data) as unknown as Payload;
   const ids = <T extends { id: string }>(rows: T[]) => {
     if (rows.some(row => !uuid(object(row).id)) || new Set(rows.map(row => row.id)).size !== rows.length) return bad();
     return new Set(rows.map(row => row.id));
@@ -76,6 +80,14 @@ export async function validateBackup(source: string): Promise<ValidatedBackup> {
   ids(payload.metadataSources);
   for (const source of payload.metadataSources) { validateMetadataSource(source); if (!bookIds.has(source.bookId)) return bad(); }
   const shelfIds = ids(payload.shelves), seriesIds = ids(payload.series), genreIds = ids(payload.genres), tagIds = ids(payload.tags); ids(payload.bookShelves);
+  ids(payload.recognitionDrafts);
+  const draftImageIds = new Set<string>();
+  for (const draft of payload.recognitionDrafts) {
+    validateDraft(draft);
+    if (draft.shelfId !== null && !shelfIds.has(draft.shelfId)) return bad();
+    for (const image of draft.images) if (image.storedImageId) { if (!imageIds.has(image.storedImageId) || payload.images.find(source => source.id === image.storedImageId)?.sha256 !== image.preparedHash) return bad(); draftImageIds.add(image.storedImageId); }
+    for (const item of draft.items) if (item.status === 'saved' && (!bookIds.has(item.bookId!) || !copyIds.has(item.copyId!) || !payload.copies.some(copy => copy.id === item.copyId && copy.bookId === item.bookId))) return bad();
+  }
   for (const [rows, isSeries] of [[payload.series, true], [payload.genres, false], [payload.tags, false]] as const) {
     const names = new Set<string>();
     for (const item of rows) {
@@ -157,7 +169,8 @@ export async function validateBackup(source: string): Promise<ValidatedBackup> {
   const images: StoredImage[] = [];
   for (const image of payload.images) {
     exact(image, ['id', 'mimeType', 'width', 'height', 'byteLength', 'sha256', 'sourceUrl', 'createdAt', 'base64']);
-    if (!integer(image.width, 1, 1200) || !integer(image.height, 1, 1200) || !integer(image.byteLength, 1, 1024 * 1024) || image.mimeType !== 'image/jpeg' || !text(image.sha256, 64) || image.sourceUrl !== null || !date(image.createdAt) || !text(image.base64, 1400000) || !/^[A-Za-z\d+/]*={0,2}$/.test(image.base64)) return bad();
+    const draftSource = draftImageIds.has(image.id);
+    if (!integer(image.width, 1, draftSource ? 2048 : 1200) || !integer(image.height, 1, draftSource ? 2048 : 1200) || !integer(image.byteLength, 1, draftSource ? 1.5 * 1024 * 1024 : 1024 * 1024) || image.mimeType !== 'image/jpeg' || !text(image.sha256, 64) || image.sourceUrl !== null || !date(image.createdAt) || !text(image.base64, draftSource ? 2100000 : 1400000) || !/^[A-Za-z\d+/]*={0,2}$/.test(image.base64)) return bad();
     let bytes: Uint8Array; try { bytes = Uint8Array.from(atob(image.base64), char => char.charCodeAt(0)); } catch { return bad(); }
     const dimensions = jpegDimensions(bytes);
     if (bytes.length !== image.byteLength || dimensions?.width !== image.width || dimensions.height !== image.height || await hashBytes(bytes.buffer as ArrayBuffer) !== image.sha256) return bad('תמונה בגיבוי פגומה. הספרייה לא שונתה.');
@@ -171,7 +184,7 @@ export async function validateBackup(source: string): Promise<ValidatedBackup> {
     }
   }
   const core: Core = { ...payload, images };
-  const countKeys = legacy ? legacyKeys : version2 ? version2Keys : version3 ? version3Keys : [...coreKeys];
+  const countKeys = keys;
   const counts = exact(root.counts, countKeys);
   for (const key of countKeys as (keyof Core)[]) if (counts[key] !== core[key].length) return bad();
   return { data: core, counts: countsOf(core), libraryName: core.settings.find(setting => setting.key === 'libraryName')!.value };
@@ -185,7 +198,7 @@ export async function restoreSnapshot(database: LibraryDatabase, backup: Validat
     for (const key of coreKeys) {
       await database.table(key).clear(); await database.table(key).bulkAdd(checked.data[key]);
     }
-    await database.metadataCache.clear(); await database.recognitionDrafts.clear();
+    await database.metadataCache.clear();
   });
 }
 export async function deleteBook(database: LibraryDatabase, id: string, expectedFingerprint: string): Promise<void> {
@@ -198,7 +211,7 @@ export async function deleteBook(database: LibraryDatabase, id: string, expected
     await database.bookShelves.where('bookId').equals(id).delete();
     await database.metadataSources.where('bookId').equals(id).delete();
     const others = await database.books.toArray();
-    if (book.primaryImageId && !others.some(other => other.primaryImageId === book.primaryImageId) && !await database.shelves.filter(shelf => shelf.imageId === book.primaryImageId).count()) await database.images.delete(book.primaryImageId);
+    if (book.primaryImageId && !others.some(other => other.primaryImageId === book.primaryImageId) && !await database.shelves.filter(shelf => shelf.imageId === book.primaryImageId).count() && !await database.recognitionDrafts.filter(draft => draft.images.some(image => image.storedImageId === book.primaryImageId)).count()) await database.images.delete(book.primaryImageId);
     for (const authorId of book.authorIds) if (!others.some(other => other.authorIds.includes(authorId))) await database.authors.delete(authorId);
   });
 }

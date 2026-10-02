@@ -51,7 +51,7 @@ export async function saveBook(database: LibraryDatabase, input: BookInput, exis
   const fields = bookFields(input);
   if (!Array.isArray(input.authors) || input.authors.length > 30) return fail('רשימת המחברים אינה תקינה.');
   const names = [...new Set(input.authors.map(name => optional(name)).filter((name): name is string => !!name))];
-  return database.transaction('rw', [database.books, database.copies, database.authors, database.images, database.shelves, database.bookShelves, database.genres, database.tags, database.series, database.metadataSources], async () => {
+  return database.transaction('rw', [database.books, database.copies, database.authors, database.images, database.shelves, database.bookShelves, database.genres, database.tags, database.series, database.metadataSources, database.recognitionDrafts], async () => {
     const current = existing ? await database.books.get(existing.id) : undefined;
     if (existing && (!current || current.revision !== existing.revision)) return fail('הספר השתנה בחלון אחר. סגור ופתח אותו מחדש לפני העריכה.');
     if (!allowDuplicate && (await duplicateBooks(database, input, existing?.id)).length) return fail('ISBN זה כבר נמצא בספרייה. בחר כיצד להמשיך.');

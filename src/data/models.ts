@@ -26,4 +26,18 @@ export interface Setting { key: SettingKey; value: string }
 export type MetadataField = 'title' | 'subtitle' | 'authors' | 'isbn10' | 'isbn13' | 'danacode' | 'publisher' | 'publicationYear' | 'edition' | 'volume' | 'language' | 'pages';
 export interface MetadataSource { id: string; bookId: string; provider: string; recordId: string; sourceUrl: string | null; fetchedAt: string; fieldValues: Partial<Record<MetadataField, string | number | string[] | null>>; selectedFields: MetadataField[]; userOverriddenFields: MetadataField[]; recognition?: { version: string; model: string; imageHash: string; item: import('./recognition').RecognizedBook } }
 export interface MetadataCache { key: string; provider: string; fetchedAt: string; expiresAt: string; minimalPayload: MetadataSource['fieldValues'][]; candidates?: { provider: string; recordId: string; sourceUrl: string | null; fetchedAt: string; kind: 'work' | 'edition' | 'volume'; fields: MetadataSource['fieldValues']; warnings: string[] }[] }
-export interface RecognitionDraft { id: string; batchId: string; imageRefs: string[]; extractedItems: MetadataSource['fieldValues'][]; decisions: { itemId: string; approved: boolean }[]; status: 'pending' | 'reviewing' | 'complete'; updatedAt: string }
+export interface DraftImage {
+  id: string; name: string; inputHash: string; storedImageId: string | null; preparedHash: string | null;
+  status: 'pending' | 'processing' | 'recognized' | 'error' | 'interrupted';
+  message: string | null;
+}
+export interface DraftItem {
+  id: string; imageId: string; item: import('./recognition').RecognizedBook; model: string; fetchedAt: string;
+  status: 'detected' | 'reviewed' | 'approved' | 'saved' | 'removed';
+  selectedFields: import('./recognition').RecognitionField[];
+  bookId: string | null; copyId: string | null;
+}
+export interface RecognitionDraft {
+  id: string; batchId: string; version: 'shelf-v1'; shelfId: string | null; images: DraftImage[]; items: DraftItem[];
+  status: 'paused' | 'running' | 'quota' | 'complete'; runId: string | null; updatedAt: string; revision: number;
+}

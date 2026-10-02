@@ -1,5 +1,5 @@
 import { imageSignature } from './images';
-import { recognitionModels, recognitionPrompt, recognitionSchema, validateRecognition, type RecognitionResult } from './recognition';
+import { recognitionModels, recognitionPrompt, recognitionSchema, shelfRecognitionPrompt, shelfRecognitionSchema, validateRecognition, validateShelfRecognition, type RecognitionResult } from './recognition';
 
 export const visionModels = recognitionModels;
 export type VisionState = 'cancelled' | 'timeout' | 'quota' | 'key' | 'unavailable' | 'invalid' | 'network' | 'spending-lock' | 'busy';
@@ -34,7 +34,7 @@ export class VisionSession {
   cancel() { this.#sequence++; this.#controller?.abort(); this.#controller = undefined; }
   get hasKey() { return Boolean(this.#key); }
   get ready() { return Boolean(this.#key && this.#freeTierVerified && this.#consent && !this.#quotaStopped); }
-  async recognize(blob: Blob, onBackup: () => void): Promise<VisionOutcome> {
+  async recognize(blob: Blob, onBackup: () => void, mode: 'single' | 'shelf' = 'single'): Promise<VisionOutcome> {
     if (this.#quotaStopped) return error('quota', 'המכסה הסתיימה. הזיהוי נעצר; אין חידוש או רכישת קרדיטים.');
     if (!this.#key) return error('key', 'הזן מפתח אישי בזיכרון לפני זיהוי.');
     if (!this.#freeTierVerified || !this.#consent) return error('spending-lock', 'השליחה חסומה עד אימות מסלול ללא חיוב ואישור שליחת התמונה.');
@@ -47,7 +47,7 @@ export class VisionSession {
     const timer = setTimeout(() => { timedOut = true; controller.abort(); }, this.timeoutMilliseconds);
     const run = async (): Promise<VisionOutcome> => {
       const data = await jpegBase64(blob); if (controller.signal.aborted) throw cancelled();
-      const body = JSON.stringify({ systemInstruction: { parts: [{ text: recognitionPrompt }] }, contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/jpeg', data } }] }], generationConfig: { responseMimeType: 'application/json', responseJsonSchema: recognitionSchema, maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: 'low' } } });
+      const body = JSON.stringify({ systemInstruction: { parts: [{ text: mode === 'shelf' ? shelfRecognitionPrompt : recognitionPrompt }] }, contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/jpeg', data } }] }], generationConfig: { responseMimeType: 'application/json', responseJsonSchema: mode === 'shelf' ? shelfRecognitionSchema : recognitionSchema, maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: 'low' } } });
       if (new TextEncoder().encode(body).length > 10 * 1024 * 1024) return error('invalid', 'בקשת הזיהוי גדולה מדי.');
       for (const [index, model] of [visionModels.primary, visionModels.backup].entries()) {
         if (controller.signal.aborted || sequence !== this.#sequence) throw cancelled();
@@ -67,7 +67,7 @@ export class VisionSession {
         if (candidate?.finishReason !== 'STOP' || !Array.isArray(candidate?.content?.parts)) return error('invalid', 'הספק לא השלים זיהוי תקין.');
         const parts = candidate.content.parts.filter(part => !part.thought); if (!parts.length || parts.some(part => typeof part.text !== 'string')) return error('invalid', 'תוצאת הזיהוי אינה טקסט תקין.');
         const extracted: unknown = JSON.parse(parts.map(part => part.text).join('')); if (JSON.stringify(extracted).includes(key)) return error('invalid', 'תגובת הזיהוי נדחתה מטעמי פרטיות.');
-        const result = validateRecognition(extracted);
+        const result = mode === 'shelf' ? validateShelfRecognition(extracted) : validateRecognition(extracted);
         return { result, model, usedBackup: index === 1 };
       }
       return error('unavailable', 'שירות הזיהוי אינו זמין.');

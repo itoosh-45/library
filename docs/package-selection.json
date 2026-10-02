@@ -1,0 +1,140 @@
+[
+  {
+    "name": "dexie",
+    "version": "4.4.6",
+    "license": "Apache-2.0",
+    "engines": null
+  },
+  {
+    "name": "dexie-react-hooks",
+    "version": "4.4.0",
+    "license": "Apache-2.0",
+    "engines": null
+  },
+  {
+    "name": "react",
+    "version": "19.3.0",
+    "license": "MIT",
+    "engines": {
+      "node": ">=0.10.0"
+    }
+  },
+  {
+    "name": "react-dom",
+    "version": "19.3.0",
+    "license": "MIT",
+    "engines": null
+  },
+  {
+    "name": "@eslint/js",
+    "version": "10.0.1",
+    "license": "MIT",
+    "engines": {
+      "node": "^20.19.0 || ^22.13.0 || >=24"
+    }
+  },
+  {
+    "name": "@playwright/test",
+    "version": "1.63.0",
+    "license": "Apache-2.0",
+    "engines": {
+      "node": ">=20"
+    }
+  },
+  {
+    "name": "@types/node",
+    "version": "24.19.1",
+    "license": "MIT",
+    "engines": null
+  },
+  {
+    "name": "@types/react",
+    "version": "19.3.0",
+    "license": "MIT",
+    "engines": null
+  },
+  {
+    "name": "@types/react-dom",
+    "version": "19.3.0",
+    "license": "MIT",
+    "engines": null
+  },
+  {
+    "name": "@vitejs/plugin-react",
+    "version": "6.1.1",
+    "license": "MIT",
+    "engines": {
+      "node": "^20.19.0 || >=22.12.0"
+    }
+  },
+  {
+    "name": "eslint",
+    "version": "10.11.0",
+    "license": "MIT",
+    "engines": {
+      "node": "^20.19.0 || ^22.13.0 || >=24"
+    }
+  },
+  {
+    "name": "eslint-plugin-react-hooks",
+    "version": "7.1.1",
+    "license": "MIT",
+    "engines": {
+      "node": ">=18"
+    }
+  },
+  {
+    "name": "eslint-plugin-react-refresh",
+    "version": "0.5.7",
+    "license": "MIT",
+    "engines": null
+  },
+  {
+    "name": "fake-indexeddb",
+    "version": "6.2.5",
+    "license": "Apache-2.0",
+    "engines": {
+      "node": ">=18"
+    }
+  },
+  {
+    "name": "globals",
+    "version": "17.13.0",
+    "license": "MIT",
+    "engines": {
+      "node": ">=18"
+    }
+  },
+  {
+    "name": "typescript",
+    "version": "6.0.3",
+    "license": "Apache-2.0",
+    "engines": {
+      "node": ">=14.17"
+    }
+  },
+  {
+    "name": "typescript-eslint",
+    "version": "8.71.0",
+    "license": "MIT",
+    "engines": {
+      "node": "^18.18.0 || ^20.9.0 || >=21.1.0"
+    }
+  },
+  {
+    "name": "vite",
+    "version": "8.3.2",
+    "license": "MIT",
+    "engines": {
+      "node": "^20.19.0 || >=22.12.0"
+    }
+  },
+  {
+    "name": "vitest",
+    "version": "5.0.3",
+    "license": "MIT",
+    "engines": {
+      "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
+    }
+  }
+]

@@ -11,7 +11,7 @@ test('Hebrew shell, local-only requests, navigation, rename and reload', async (
   await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
   await page.getByLabel('שם הספרייה', { exact: true }).fill('ספריית בדיקה');
   await page.getByRole('button', { name: 'שמירת השם' }).click();
-  await expect(page.getByRole('status')).toHaveText('שם הספרייה נשמר.');
+  await expect(page.getByRole('status').filter({ hasText: 'שם הספרייה נשמר.' })).toHaveText('שם הספרייה נשמר.');
   await page.reload();
   await expect(page.getByLabel('שם הספרייה', { exact: true })).toHaveValue('ספריית בדיקה');
   await page.getByRole('link', { name: 'מדפים', exact: true }).click();

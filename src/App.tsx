@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './data/database';
 import { LibraryValidationError, renameLibrary } from './data/library';
@@ -11,6 +11,7 @@ import { SearchControls, Statistics } from './SearchControls';
 import { bookComparator, emptyFilters, filterBooks, type SortKey } from './data/search';
 import { LoansPanel } from './LoansPanel';
 
+const VisionKey = lazy(() => import('./VisionKey'));
 const sections = [
   { id: 'books', label: 'כל הספרים', icon: 'book' },
   { id: 'shelves', label: 'מדפים', icon: 'shelf' },
@@ -78,7 +79,7 @@ export function App() {
     <main id="main-content" tabIndex={-1} className="content"><header className="page-heading"><div><p className="eyebrow">{data.name}</p><h1>{title}{total !== null && <span className="total">{total}</span>}</h1></div><span className="local-badge"><span aria-hidden="true" />ספרייה מקומית</span></header>
       {['books', 'shelves', 'collections'].includes(section) && <div className="toolbar"><button onClick={() => { savedScroll.current = window.scrollY; savedFocus.current = document.activeElement as HTMLElement; setEditor({ key: Date.now() }); }}>הוספת ספר</button><label className="check"><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} />כולל ספרים בארכיון</label><button className="secondary" onClick={async () => { try { await db.settings.put({ key: 'displayMode', value: data.displayMode === 'compact' ? 'expanded' : 'compact' }); setDisplayError(''); } catch { setDisplayError('התצוגה לא נשמרה. נסה שוב.'); } }}>{data.displayMode === 'compact' ? 'תצוגה מורחבת' : 'תצוגה מצומצמת'}</button><p role="alert">{displayError}</p></div>}
       {['books', 'shelves', 'collections'].includes(section) && <><SearchControls data={data} filters={filters} setFilters={setFilters} sort={sort} setSort={setSort} descending={descending} setDescending={setDescending} /><Statistics data={data} books={visibleBooks} /></>}
-      {section === 'settings' ? <section className="settings-card"><h2>הספרייה שלך</h2><p>בחר שם שיופיע בראש הספרייה.</p><LibraryNameForm name={data.name} /><div className="setting-note"><h3>שמירה במכשיר</h3><p>הנתונים נשמרים בדפדפן ובמכשיר שבהם פתחת את הספרייה.</p></div><BackupPanel /></section> : section === 'shelves' ? <ShelvesPanel list={list} /> : section === 'collections' ? <CollectionsPanel list={list} /> : section === 'loans' ? <LoansPanel /> : section === 'books' && visibleBooks.length > 0 ? <BookList {...list} /> : <section className="empty-state"><div className="empty-icon"><Icon kind={sections.find(item => item.id === section)!.icon} /></div><h2>{section === 'books' ? (data.books.length ? 'אין ספרים שמתאימים לחיפוש' : 'כאן מתחילה הספרייה שלך') : 'ההשאלות שלך'}</h2><p>{section === 'books' ? 'הספרים שלך יופיעו כאן ברשימה אחת מסודרת.' : 'כאן תוכל לעקוב אחר עותקים שהשאלת ומועד החזרתם.'}</p><span className="empty-caption">{section === 'books' ? 'אין ספרים בתצוגה הזאת' : 'אין השאלות פתוחות'}</span></section>}
+      {section === 'settings' ? <section className="settings-card"><h2>הספרייה שלך</h2><p>בחר שם שיופיע בראש הספרייה.</p><LibraryNameForm name={data.name} /><div className="setting-note"><h3>שמירה במכשיר</h3><p>הנתונים נשמרים בדפדפן ובמכשיר שבהם פתחת את הספרייה.</p></div><Suspense fallback={<p role="status">טוען הגדרות זיהוי…</p>}><VisionKey /></Suspense><BackupPanel /></section> : section === 'shelves' ? <ShelvesPanel list={list} /> : section === 'collections' ? <CollectionsPanel list={list} /> : section === 'loans' ? <LoansPanel /> : section === 'books' && visibleBooks.length > 0 ? <BookList {...list} /> : <section className="empty-state"><div className="empty-icon"><Icon kind={sections.find(item => item.id === section)!.icon} /></div><h2>{section === 'books' ? (data.books.length ? 'אין ספרים שמתאימים לחיפוש' : 'כאן מתחילה הספרייה שלך') : 'ההשאלות שלך'}</h2><p>{section === 'books' ? 'הספרים שלך יופיעו כאן ברשימה אחת מסודרת.' : 'כאן תוכל לעקוב אחר עותקים שהשאלת ומועד החזרתם.'}</p><span className="empty-caption">{section === 'books' ? 'אין ספרים בתצוגה הזאת' : 'אין השאלות פתוחות'}</span></section>}
     </main>
     {editor && <BookEditor key={editor.key} book={editor.book} authorNames={editor.book?.authorIds.map(id => data.authors.find(author => author.id === id)?.displayName ?? '') ?? []} onClose={closeEditor} onOpen={book => setEditor({ book, key: Date.now() })} />}
   </div>;

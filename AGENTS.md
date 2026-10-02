@@ -21,7 +21,7 @@ The product is a personal Hebrew/RTL library app. Follow the approved project pl
 
 ## Work and validation
 
-Stage 9 scanner is built locally in App 0.7.0: lazy native/ZXing decoding, camera cancellation and manual/image alternatives feed the catalog draft with explicit approval. See docs/phase-09-progress.md for local test evidence and outstanding physical-device checks. Stage 10 is the next independent implementation step; cycle 5 is not complete without its evidence.
+Stage 9 scanner and stage 10 single-book vision are built locally in App 0.8.0, database schema 2, JSON backup v5 (reads v1–v5). Image preparation, memory-only personal key, explicit no-charge verification and consent, selected draft fields and atomic source evidence are implemented. See docs/phase-09-progress.md and docs/phase-10-progress.md. Gemini tests are mocked. The user reported checking their Gemini project is Free with no active billing; real recognition accuracy and physical phone checks remain NOT RUN. Stage 11 is the next independent implementation step; cycle 5 is not complete without its missing evidence.
 
 Use npm run check and npm run test:browser as appropriate. Run targeted checks for changed behavior. Synthetic fixtures, desktop browsers and CI do not establish live provider accuracy, physical phone behavior or deployment success.
 

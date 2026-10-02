@@ -77,7 +77,8 @@ it('T19 provenance saves with book atomically and rolls back all related writes 
 it('T19 v4 source round trip validates references and whitelist; cache is excluded; deletion cleans source', async () => {
   const book = await saveCatalogBook(database, { ...emptyInput, title: 'כותרת סינתטית' }, candidate({ title: 'כותרת סינתטית' }), ['title']);
   await database.metadataCache.add({ key: 'ignored', provider: 'openlibrary', fetchedAt: new Date().toISOString(), expiresAt: new Date().toISOString(), minimalPayload: [] });
-  const snapshot = await createSnapshot(database), root = JSON.parse(snapshot.text); expect(root.version).toBe(4); expect(root.counts.metadataSources).toBe(1); expect(root.data.metadataCache).toBeUndefined();
+  const snapshot = await createSnapshot(database), root = JSON.parse(snapshot.text); expect(root.version).toBe(5); expect(root.counts.metadataSources).toBe(1); expect(root.data.metadataCache).toBeUndefined();
+  const previousFormat = { ...root, version: 4 }; expect((await validateBackup(JSON.stringify(previousFormat))).data.metadataSources).toEqual(root.data.metadataSources);
   await restoreSnapshot(database, await validateBackup(snapshot.text), snapshot.fingerprint); expect((await createSnapshot(database)).fingerprint).toBe(snapshot.fingerprint); expect(await database.metadataCache.count()).toBe(0);
   const broken = structuredClone(root); broken.data.metadataSources[0].bookId = crypto.randomUUID(); broken.checksum = await hashBytes(new TextEncoder().encode(JSON.stringify(broken.data)).buffer); await expect(validateBackup(JSON.stringify(broken))).rejects.toThrow();
   const source = root.data.metadataSources[0]; expect(() => validateMetadataSource({ ...source, fieldValues: { ...source.fieldValues, secret: 'forbidden' } })).toThrow();

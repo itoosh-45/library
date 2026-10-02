@@ -1,6 +1,7 @@
 import type { MetadataField, MetadataSource } from './models';
 import { LibraryValidationError } from './library';
 import { comparableISBN, parseISBN } from './books';
+import { recognitionModels, recognitionVersion, recognitionValues, validateRecognition } from './recognition';
 
 export const metadataFields: MetadataField[] = ['title', 'subtitle', 'authors', 'isbn10', 'isbn13', 'danacode', 'publisher', 'publicationYear', 'edition', 'volume', 'language', 'pages'];
 export const providerNames = { openlibrary: 'Open Library', googlebooks: 'Google Books', nli: 'הספרייה הלאומית' } as const;
@@ -41,10 +42,15 @@ export function validateCandidate(value: unknown): Candidate {
   return row as unknown as Candidate;
 }
 export function validateMetadataSource(value: unknown): MetadataSource {
-  const row = record(value), keys = ['id', 'bookId', 'provider', 'recordId', 'sourceUrl', 'fetchedAt', 'fieldValues', 'selectedFields', 'userOverriddenFields'];
-  if (Object.keys(row).length !== keys.length || Object.keys(row).some(key => !keys.includes(key)) || !isProvider(row.provider) || typeof row.recordId !== 'string' || !row.recordId || row.recordId.length > 300 || !safeSourceUrl(row.sourceUrl) || !utcDate(row.fetchedAt)) return fail();
+  const row = record(value), vision = row.provider === 'gemini', keys = ['id', 'bookId', 'provider', 'recordId', 'sourceUrl', 'fetchedAt', 'fieldValues', 'selectedFields', 'userOverriddenFields', ...(vision ? ['recognition'] : [])];
+  if (Object.keys(row).length !== keys.length || Object.keys(row).some(key => !keys.includes(key)) || (!vision && !isProvider(row.provider)) || typeof row.recordId !== 'string' || !row.recordId || row.recordId.length > 300 || !safeSourceUrl(row.sourceUrl) || !utcDate(row.fetchedAt)) return fail();
   const fields = validateFieldValues(row.fieldValues);
-  if (!matchesProvider(row.provider, row.sourceUrl)) return fail();
+  if (vision) {
+    const evidence = record(row.recognition);
+    if (Object.keys(evidence).length !== 4 || Object.keys(evidence).some(key => !['version', 'model', 'imageHash', 'item'].includes(key)) || evidence.version !== recognitionVersion || !Object.values(recognitionModels).includes(evidence.model as never) || typeof evidence.imageHash !== 'string' || !/^[a-f0-9]{64}$/.test(evidence.imageHash) || row.sourceUrl !== null || row.recordId !== `${evidence.model}/${evidence.version}/${evidence.imageHash}`) return fail();
+    const item = validateRecognition({ items: [evidence.item] }).items[0], expected = recognitionValues(item);
+    if (Object.keys(expected).length !== Object.keys(fields).length || metadataFields.some(field => JSON.stringify(expected[field]) !== JSON.stringify(fields[field]))) return fail();
+  } else if (!matchesProvider(row.provider as Provider, row.sourceUrl)) return fail();
   for (const key of ['selectedFields', 'userOverriddenFields']) {
     const selected = row[key];
     if (!Array.isArray(selected) || selected.length > metadataFields.length || new Set(selected).size !== selected.length || selected.some(field => !metadataFields.includes(field) || !Object.hasOwn(fields, field) || fields[field as MetadataField] == null)) return fail();

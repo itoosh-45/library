@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './data/database';
-import type { Book, Copy, StoredImage } from './data/models';
-import { changeCopy, duplicateBooks, emptyInput, readingStates, saveBook, type BookInput } from './data/books';
+import type { Book, Copy, MetadataField, StoredImage } from './data/models';
+import { changeCopy, duplicateBooks, emptyInput, readingStates, type BookInput } from './data/books';
 import { prepareImage } from './data/images';
 import { createSnapshot, deleteBook, downloadSnapshot, type Snapshot } from './data/backup';
 import { errorMessage } from './data/errors';
@@ -10,9 +10,13 @@ import { CollectionFields } from './CollectionFields';
 import { BookLoans } from './LoansPanel';
 import { Sheet } from './Sheet';
 import { CatalogPanel, Provenance } from './CatalogPanel';
-import { saveCatalogSelections, type CatalogSelection } from './data/catalogSave';
+import { saveBookSelections, type CatalogSelection, type RecognitionSelection } from './data/catalogSave';
+import { recognitionInput, recognitionMetadataFields } from './data/recognition';
 export { Sheet } from './Sheet';
 const BarcodeScanner = lazy(() => import('./BarcodeScanner'));
+const SingleBookVision = lazy(() => import('./SingleBookVision'));
+const overlapsSource = (field: MetadataField, selected: MetadataField[]) => selected.includes(field) || (field.startsWith('isbn') && selected.some(next => next.startsWith('isbn')));
+const remainingRecognition = (selection: RecognitionSelection, fields: MetadataField[]) => ({ ...selection, selected: selection.selected.filter(field => !recognitionMetadataFields(selection.item, [field]).some(metadata => overlapsSource(metadata, fields))) });
 
 export function Thumbnail({ imageId, image, alt = 'כריכת הספר' }: { imageId?: string | null; image?: StoredImage | null; alt?: string }) {
   const stored = useLiveQuery(() => imageId ? db.images.get(imageId) : undefined, [imageId]);
@@ -38,6 +42,7 @@ export function BookEditor({ book, authorNames, onClose, onOpen }: { book?: Book
   const [safety, setSafety] = useState<Snapshot>();
   const [confirmed, setConfirmed] = useState(false);
   const [catalogSelections, setCatalogSelections] = useState<CatalogSelection[]>([]);
+  const [recognitionSelections, setRecognitionSelections] = useState<RecognitionSelection[]>([]), [vision, setVision] = useState(false);
   const [scanner, setScanner] = useState(false), [barcodeRevision, setBarcodeRevision] = useState(0);
   const copies = useLiveQuery(() => book ? db.copies.where('bookId').equals(book.id).toArray() : [], [book?.id]) ?? [];
   function field(key: Exclude<keyof BookInput, 'authors' | 'readStatus' | 'shelfIds' | 'genreIds' | 'tagIds' | 'seriesId' | 'seriesNumber'>, label: string, numeric = false) {
@@ -47,11 +52,11 @@ export function BookEditor({ book, authorNames, onClose, onOpen }: { book?: Book
     event?.preventDefault(); setError(''); setBusy(true);
     try {
       if (!allowDuplicate) { const matches = await duplicateBooks(db, input, book?.id); if (matches.length) { setDuplicates(matches); return; } }
-      if (catalogSelections.length) await saveCatalogSelections(db, input, catalogSelections, book, image, allowDuplicate);
-      else await saveBook(db, input, book, image, allowDuplicate);
+      await saveDraft(allowDuplicate);
       onClose();
     } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); }
   }
+  function saveDraft(allowDuplicate = false) { return saveBookSelections(db, input, catalogSelections, recognitionSelections, book, image, allowDuplicate); }
   async function upload(file?: File) {
     if (!file) return; setBusy(true); setError('');
     try { setImage(await prepareImage(file)); setDirty(true); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); }
@@ -67,7 +72,9 @@ export function BookEditor({ book, authorNames, onClose, onOpen }: { book?: Book
     {dirtyCopyId && <p className="notice">יש שינוי בעותק. שמור את העותק לפני שמירה נוספת של הספר.</p>}
     <button type="button" className="secondary" disabled={busy || !!dirtyCopyId} onClick={() => setScanner(true)}>סריקת ברקוד או הקלדת מזהה</button>
     {scanner && <Suspense fallback={<p role="status">טוען סורק…</p>}><BarcodeScanner onClose={() => setScanner(false)} onApply={(kind, value) => { setInput(old => ({ ...old, [kind]: value })); setDirty(true); setDuplicates([]); setBarcodeRevision(old => old + 1); setScanner(false); }} /></Suspense>}
-    <CatalogPanel key={barcodeRevision} autoOpen={barcodeRevision > 0} input={input} disabled={busy || !!dirtyCopyId} onApply={(draft, candidate, selected) => { setInput(draft); setDirty(true); setDuplicates([]); setCatalogSelections(old => [...old.map(item => ({ ...item, selected: item.selected.filter(field => !selected.includes(field) && !(field.startsWith('isbn') && selected.some(next => next.startsWith('isbn')))) })).filter(item => item.selected.length), { candidate, selected }]); }} />
+    <button type="button" className="secondary" disabled={busy || !!dirtyCopyId} onClick={() => setVision(true)}>זיהוי ספר מתמונה</button>
+    {vision && <Suspense fallback={<p role="status">טוען זיהוי תמונה…</p>}><SingleBookVision onClose={() => setVision(false)} onApply={selection => { const fields = recognitionMetadataFields(selection.item, selection.selected); setInput(old => recognitionInput(old, selection.item, selection.selected)); setRecognitionSelections(old => [...old.map(item => remainingRecognition(item, fields)).filter(item => item.selected.length), selection]); setCatalogSelections(old => old.map(item => ({ ...item, selected: item.selected.filter(field => !overlapsSource(field, fields)) })).filter(item => item.selected.length)); setDirty(true); setDuplicates([]); setBarcodeRevision(old => old + 1); setVision(false); }} /></Suspense>}
+    <CatalogPanel key={barcodeRevision} autoOpen={barcodeRevision > 0} input={input} disabled={busy || !!dirtyCopyId} onApply={(draft, candidate, selected) => { setInput(draft); setDirty(true); setDuplicates([]); setRecognitionSelections(old => old.map(item => remainingRecognition(item, selected)).filter(item => item.selected.length)); setCatalogSelections(old => [...old.map(item => ({ ...item, selected: item.selected.filter(field => !overlapsSource(field, selected)) })).filter(item => item.selected.length), { candidate, selected }]); }} />
     {book && <Provenance bookId={book.id} />}
     <form onSubmit={event => void save(event)}><fieldset disabled={busy || !!dirtyCopyId}><p className="hint">כל השדות לבחירה. אפשר לשמור ספר גם ללא שם ולמלא בהמשך.</p>
       <div className="cover-editor"><Thumbnail imageId={image === undefined ? book?.primaryImageId : null} image={image} /><label className="field">תמונת כריכה<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={event => { void upload(event.target.files?.[0]); event.target.value = ''; }} /></label><button type="button" className="secondary" onClick={() => { setImage(null); setDirty(true); }}>הסרת תמונה</button></div>
@@ -83,8 +90,8 @@ export function BookEditor({ book, authorNames, onClose, onOpen }: { book?: Book
     </fieldset></form>
     {book && <BookLoans book={book} copies={copies} disabled={busy || dirty || !!dirtyCopyId} onBusy={setBusy} />}
     {book && <section className="copies-section"><h3>עותקים ({copies.length})</h3><p className="hint">עריכה והוספת עותק שומרות גם את הפרטים שמופיעים למעלה.</p>{copies.map(copy => <CopyEditor key={copy.id} copy={copy} disabled={busy || (!!dirtyCopyId && dirtyCopyId !== copy.id)} onDirty={() => { setDirty(true); setDirtyCopyId(copy.id); }} onSave={async values => {
-      setBusy(true); try { await db.transaction('rw', db.tables, async () => { const updated = catalogSelections.length ? await saveCatalogSelections(db, input, catalogSelections, book, image) : await saveBook(db, input, book, image); await changeCopy(db, book.id, updated.revision, { id: copy.id, ...values }); }); onOpen((await db.books.get(book.id))!); } finally { setBusy(false); }
-    }} />)}<button type="button" className="secondary" disabled={busy || !!dirtyCopyId} onClick={async () => { setBusy(true); setError(''); try { await db.transaction('rw', db.tables, async () => { const updated = catalogSelections.length ? await saveCatalogSelections(db, input, catalogSelections, book, image) : await saveBook(db, input, book, image); await changeCopy(db, book.id, updated.revision, {}); }); onOpen((await db.books.get(book.id))!); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); } }}>הוספת עותק</button>
+      setBusy(true); try { await db.transaction('rw', db.tables, async () => { const updated = await saveDraft(); await changeCopy(db, book.id, updated.revision, { id: copy.id, ...values }); }); onOpen((await db.books.get(book.id))!); } finally { setBusy(false); }
+    }} />)}<button type="button" className="secondary" disabled={busy || !!dirtyCopyId} onClick={async () => { setBusy(true); setError(''); try { await db.transaction('rw', db.tables, async () => { const updated = await saveDraft(); await changeCopy(db, book.id, updated.revision, {}); }); onOpen((await db.books.get(book.id))!); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); } }}>הוספת עותק</button>
       <details className="delete-section"><summary>מחיקת הספר</summary><p>יימחקו הספר, {copies.length} העותקים ותמונתו אם אינה משמשת ספר אחר. חלופה: ארכוב עותקים שומר את הספר.</p><button type="button" className="secondary" disabled={busy} onClick={() => void protectDelete()}>הורדת גיבוי מגן לפני מחיקה</button>{safety && <><label className="check"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />וידאתי שהגיבוי ירד למחשב ואני מאשר את המחיקה</label><button type="button" disabled={!confirmed || busy} onClick={() => void remove()}>מחיקה סופית של הספר</button></>}</details>
     </section>}
   </Sheet>;

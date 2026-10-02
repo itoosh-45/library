@@ -80,7 +80,7 @@ it('v3 backup round trip protects people, duplicates, archived people and loan h
   const { copies, person, other } = await fixture(), loan = await lendCopy(database, loanInput(copies[0].id, person.id));
   await returnCopy(database, loan.id, '2026-01-03'); await archivePerson(database, person, true); await lendCopy(database, loanInput(copies[1].id, other.id));
   await savePerson(database, other.name, undefined, true);
-  const snapshot = await createSnapshot(database), incoming = await validateBackup(snapshot.text); expect(JSON.parse(snapshot.text).version).toBe(4); expect(incoming.counts).toMatchObject({ people: 3, loans: 2 });
+  const snapshot = await createSnapshot(database), incoming = await validateBackup(snapshot.text); expect(JSON.parse(snapshot.text).version).toBe(5); expect(incoming.counts).toMatchObject({ people: 3, loans: 2 });
   await restoreSnapshot(database, incoming, snapshot.fingerprint); expect((await createSnapshot(database)).fingerprint).toBe(snapshot.fingerprint);
 });
 for (const version of [1, 2]) it(`v${version} restore explicitly clears people/loans and accepts old counts`, async () => {

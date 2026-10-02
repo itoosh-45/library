@@ -18,7 +18,7 @@ test('Hebrew shell, local-only requests, navigation, rename and reload', async (
   await expect(page.getByRole('heading', { name: /מדפים/, level: 1 })).toBeVisible();
   await page.setViewportSize({ width: 360, height: 800 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  expect(await page.getByRole('navigation').getByRole('link').count()).toBe(4);
+  expect(await page.getByRole('navigation').getByRole('link').count()).toBe(5);
   expect(external).toEqual([]); expect(errors).toEqual([]);
   expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0);
 });

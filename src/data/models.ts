@@ -17,6 +17,7 @@ export interface Author { id: string; displayName: string; givenName: string | n
 export interface Shelf { id: string; name: string; parentId: string | null; imageId: string | null; sortOrder: number; createdAt: string; updatedAt: string }
 export interface BookShelf { id: string; bookId: string; shelfId: string }
 export interface NamedItem { id: string; name: string; normalizedName: string }
+export interface Series extends NamedItem { collapsed: boolean }
 export interface Person extends NamedItem { archivedAt: string | null }
 export interface Loan { id: string; copyId: string; personId: string; borrowedAt: string; expectedReturnOn: string | null; returnedAt: string | null; openFlag: 0 | 1; notes: string | null; createdAt: string; updatedAt: string }
 export interface StoredImage { id: string; blob: Blob; mimeType: string; width: number; height: number; byteLength: number; sha256: string; sourceUrl: string | null; createdAt: string }

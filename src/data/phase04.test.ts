@@ -47,7 +47,7 @@ it('failed copy write rolls back new authors and book; invalid numeric fields ne
 it('a copy failure rolls back the book edit in the same transaction', async () => {
   const book = await saveBook(database, { ...emptyInput, title: 'לפני' });
   const fail = () => { throw new Error('copy failure'); }; database.copies.hook('creating', fail);
-  await expect(database.transaction('rw', [database.books, database.copies, database.authors, database.images, database.loans], async () => {
+  await expect(database.transaction('rw', [database.books, database.copies, database.authors, database.images, database.loans, database.shelves, database.bookShelves, database.genres, database.tags, database.series], async () => {
     const changed = await saveBook(database, { ...emptyInput, title: 'אחרי' }, book);
     await changeCopy(database, changed.id, changed.revision, {});
   })).rejects.toThrow();
@@ -72,7 +72,7 @@ it('basic snapshot restores exact book/copy/author/settings data and identity', 
 it('bad versions, secrets, invalid types, orphan relations and inconsistent counts are rejected without writes', async () => {
   await saveBook(database, emptyInput); const before = await createSnapshot(database);
   const edits = [
-    (b: ReturnType<typeof JSON.parse>) => { b.version = 2; },
+    (b: ReturnType<typeof JSON.parse>) => { b.version = 3; },
     (b: ReturnType<typeof JSON.parse>) => { b.data.books[0].apiKey = 'synthetic-forbidden'; },
     (b: ReturnType<typeof JSON.parse>) => { b.data.copies[0].bookId = crypto.randomUUID(); },
     (b: ReturnType<typeof JSON.parse>) => { b.data.books[0].readStatus = ['read']; },

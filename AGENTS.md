@@ -4,7 +4,7 @@
 
 This repository, https://github.com/itoosh-45/library, is the canonical application project. Build and maintain all new application code, experiments, tests and planning here. Do not create another application repository or develop future features in a detached chat outputs folder. The current checkout is outputs/library-app in the continuation workspace.
 
-The product is a personal Hebrew/RTL library app. Follow the approved project plan and existing local design. Completed stage: 3. Next stage: 4, book/copy editing and safe basic JSON backup/restore. The user explicitly authorized local construction while remaining feasibility checks are deferred; do not reintroduce gate 1 as a blocker to that authorized local work. Deferred checks remain open and must not be labeled PASS.
+The product is a personal Hebrew/RTL library app. Follow the approved project plan and existing local design. Completed stages: 3 and 4, including book/copy editing and safe basic JSON backup/restore. Next stage: 5, shelves, tags, genres and series. Extend the basic backup format to protect any new persistent entities before adding them; do not silently omit them or leave backup unusable after normal stage 5 operations. The user explicitly authorized local construction while remaining feasibility checks are deferred; do not reintroduce gate 1 as a blocker to that authorized local work. Deferred checks remain open and must not be labeled PASS.
 
 ## Boundaries
 

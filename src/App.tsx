@@ -2,6 +2,10 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './data/database';
 import { LibraryValidationError, renameLibrary } from './data/library';
+import type { Book } from './data/models';
+import { BookEditor, Thumbnail } from './BookEditor';
+import { BackupPanel } from './BackupPanel';
+import { readingStates } from './data/books';
 
 const sections = [
   { id: 'books', label: 'כל הספרים', icon: 'book' },
@@ -37,6 +41,9 @@ function LibraryNameForm({ name }: { name: string }) {
 }
 export function App() {
   const [section, setSection] = useState<Section>(currentSection);
+  const [editor, setEditor] = useState<{ book?: Book; key: number }>();
+  const [showArchived, setShowArchived] = useState(false);
+  const [displayError, setDisplayError] = useState('');
   useEffect(() => {
     const changed = () => setSection(currentSection());
     window.addEventListener('hashchange', changed);
@@ -46,15 +53,19 @@ export function App() {
     name: (await db.settings.get('libraryName'))?.value ?? 'הספרייה שלי',
     books: await db.books.toArray(), copies: await db.copies.toArray(), authors: await db.authors.toArray(),
     shelves: await db.shelves.count(), openLoans: await db.loans.where('openFlag').equals(1).count(),
+    displayMode: (await db.settings.get('displayMode'))?.value ?? 'compact',
   }));
   if (!data) return <p className="loading" role="status">טוען את הספרייה…</p>;
   const title = sections.find(item => item.id === section)!.label;
+  const visibleBooks = data.books.filter(book => showArchived || data.copies.some(copy => copy.bookId === book.id && !copy.archivedAt)).sort((a, b) => a.titleSortKey.localeCompare(b.titleSortKey, 'he'));
   const total = section === 'books' ? data.books.length : section === 'shelves' ? data.shelves : section === 'loans' ? data.openLoans : null;
   return <div className="app-shell">
     <a className="skip-link" href="#main-content" onClick={event => { event.preventDefault(); document.getElementById('main-content')?.focus(); }}>דילוג לתוכן</a>
     <aside className="sidebar"><div className="brand"><Icon kind="book" /><span>הספרייה שלי</span></div><p className="library-name">{data.name}</p><nav aria-label="ניווט ראשי">{sections.map(item => <a key={item.id} href={'#' + item.id} aria-current={section === item.id ? 'page' : undefined}><Icon kind={item.icon} /><span>{item.label}</span></a>)}</nav><p className="local-note">הספרייה שלך נשמרת<br />בדפדפן הזה.</p></aside>
     <main id="main-content" tabIndex={-1} className="content"><header className="page-heading"><div><p className="eyebrow">{data.name}</p><h1>{title}{total !== null && <span className="total">{total}</span>}</h1></div><span className="local-badge"><span aria-hidden="true" />ספרייה מקומית</span></header>
-      {section === 'settings' ? <section className="settings-card"><h2>הספרייה שלך</h2><p>בחר שם שיופיע בראש הספרייה.</p><LibraryNameForm name={data.name} /><div className="setting-note"><h3>שמירה במכשיר</h3><p>הנתונים נשמרים בדפדפן ובמכשיר שבהם פתחת את הספרייה.</p></div></section> : section === 'books' && data.books.length > 0 ? <ul className="book-list">{data.books.map(book => <li key={book.id}><div className="book-placeholder" aria-hidden="true"><Icon kind="book" /></div><div className="book-info"><h2>{book.title ?? 'ללא שם'}</h2><p>{book.authorIds.map(id => data.authors.find(author => author.id === id)?.displayName).filter(Boolean).join(' · ') || 'ללא מחבר'}</p></div><span className="copy-count">{data.copies.filter(copy => copy.bookId === book.id && !copy.archivedAt).length} עותקים</span></li>)}</ul> : <section className="empty-state"><div className="empty-icon"><Icon kind={sections.find(item => item.id === section)!.icon} /></div><h2>{section === 'books' ? 'כאן מתחילה הספרייה שלך' : section === 'shelves' ? 'המדפים שלך' : 'ההשאלות שלך'}</h2><p>{section === 'books' ? 'הספרים שלך יופיעו כאן ברשימה אחת מסודרת.' : section === 'shelves' ? 'כאן תוכל לארגן את הספרים באוספים ובתתי־מדפים.' : 'כאן תוכל לעקוב אחר עותקים שהשאלת ומועד החזרתם.'}</p><span className="empty-caption">{section === 'books' ? 'עוד לא נוספו ספרים' : section === 'shelves' ? 'עוד לא נוספו מדפים' : 'אין השאלות פתוחות'}</span></section>}
+      {section === 'books' && <div className="toolbar"><button onClick={() => setEditor({ key: Date.now() })}>הוספת ספר</button><label className="check"><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} />כולל ספרים בארכיון</label><button className="secondary" onClick={async () => { try { await db.settings.put({ key: 'displayMode', value: data.displayMode === 'compact' ? 'expanded' : 'compact' }); setDisplayError(''); } catch { setDisplayError('התצוגה לא נשמרה. נסה שוב.'); } }}>{data.displayMode === 'compact' ? 'תצוגה מורחבת' : 'תצוגה מצומצמת'}</button><p role="alert">{displayError}</p></div>}
+      {section === 'settings' ? <section className="settings-card"><h2>הספרייה שלך</h2><p>בחר שם שיופיע בראש הספרייה.</p><LibraryNameForm name={data.name} /><div className="setting-note"><h3>שמירה במכשיר</h3><p>הנתונים נשמרים בדפדפן ובמכשיר שבהם פתחת את הספרייה.</p></div><BackupPanel /></section> : section === 'books' && visibleBooks.length > 0 ? <ul className="book-list">{visibleBooks.map(book => <li key={book.id}><button className="book-row" onClick={() => setEditor({ book, key: Date.now() })}><Thumbnail imageId={book.primaryImageId} /><div className="book-info"><h2>{book.title ?? 'ללא שם'}</h2><p>{book.authorIds.map(id => data.authors.find(author => author.id === id)?.displayName).filter(Boolean).join(' · ') || 'ללא מחבר'}</p>{data.displayMode === 'expanded' && <p>{[readingStates[book.readStatus], book.publisher, book.publicationYear, book.isbn13 ?? book.isbn10].filter(Boolean).join(' · ')}</p>}</div><span className="copy-count">{data.copies.filter(copy => copy.bookId === book.id && !copy.archivedAt).length} עותקים</span></button></li>)}</ul> : <section className="empty-state"><div className="empty-icon"><Icon kind={sections.find(item => item.id === section)!.icon} /></div><h2>{section === 'books' ? 'כאן מתחילה הספרייה שלך' : section === 'shelves' ? 'המדפים שלך' : 'ההשאלות שלך'}</h2><p>{section === 'books' ? 'הספרים שלך יופיעו כאן ברשימה אחת מסודרת.' : section === 'shelves' ? 'כאן תוכל לארגן את הספרים באוספים ובתתי־מדפים.' : 'כאן תוכל לעקוב אחר עותקים שהשאלת ומועד החזרתם.'}</p><span className="empty-caption">{section === 'books' ? 'אין ספרים בתצוגה הזאת' : section === 'shelves' ? 'עוד לא נוספו מדפים' : 'אין השאלות פתוחות'}</span></section>}
     </main>
+    {editor && <BookEditor key={editor.key} book={editor.book} authorNames={editor.book?.authorIds.map(id => data.authors.find(author => author.id === id)?.displayName ?? '') ?? []} onClose={() => setEditor(undefined)} onOpen={book => setEditor({ book, key: Date.now() })} />}
   </div>;
 }

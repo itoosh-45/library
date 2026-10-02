@@ -8,6 +8,8 @@ The product is a personal Hebrew/RTL library app. Follow the approved project pl
 
 ## Boundaries
 
+- Critical spending lock (user instruction, 2026-10-02): never pay, renew or extend a subscription, purchase or add credits, or use any credit card directly or indirectly. This overrides the general project authorization and deployment/model plans. Do not enable billing, automatic top-ups, paid upgrades or a fallback that charges a payment method. Use only available resources without a new charge; when credits run out, stop work rather than replenish them or bypass the limit. Carry this rule into any continuation chat.
+
 - The user's 2026-10-02 autonomous-work instruction in DECISIONS.md overrides user-dependent gate stops: continue independent implementation even without replies; surface required user tests as questions; keep missing evidence BLOCKED/NOT RUN. Merge each newly tested stage to main without asking. All actions within WORK_PLAN.md are authorized; do not repeat routine approvals. Do not treat missing credentials or actual access as present, and do not claim complete without evidence. No additional agents without explicit authorization.
 
 - The user authorized replacing the camera experiment on main with application source. Preserve existing history. No force push or private feasibility history import.

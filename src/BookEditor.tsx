@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './data/database';
 import type { Book, Copy, StoredImage } from './data/models';
@@ -7,17 +7,10 @@ import { prepareImage } from './data/images';
 import { createSnapshot, deleteBook, downloadSnapshot, type Snapshot } from './data/backup';
 import { errorMessage } from './data/errors';
 import { CollectionFields } from './CollectionFields';
+import { BookLoans } from './LoansPanel';
+import { Sheet } from './Sheet';
+export { Sheet } from './Sheet';
 
-export function Sheet({ title, children, onClose, busy = false, dirty = false }: { title: string; children: ReactNode; onClose: () => void; busy?: boolean; dirty?: boolean }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const [discard, setDiscard] = useState(false);
-  useEffect(() => { const dialog = ref.current!; dialog.showModal(); return () => dialog.close(); }, []);
-  function close() { if (busy) return; if (dirty) setDiscard(true); else onClose(); }
-  return <dialog ref={ref} className="sheet" aria-label={title} onCancel={event => { event.preventDefault(); close(); }}>
-    <header className="sheet-heading"><h2>{title}</h2><button type="button" className="secondary" onClick={close} disabled={busy} aria-label="סגירה">✕</button></header>
-    {discard ? <section><p>יש שינויים שלא נשמרו. לסגור ולוותר עליהם?</p><div className="actions"><button onClick={onClose}>ויתור על השינויים</button><button className="secondary" onClick={() => setDiscard(false)}>חזרה לעריכה</button></div></section> : children}
-  </dialog>;
-}
 export function Thumbnail({ imageId, image, alt = 'כריכת הספר' }: { imageId?: string | null; image?: StoredImage | null; alt?: string }) {
   const stored = useLiveQuery(() => imageId ? db.images.get(imageId) : undefined, [imageId]);
   const blob = image?.blob ?? stored?.blob;
@@ -77,6 +70,7 @@ export function BookEditor({ book, authorNames, onClose, onOpen }: { book?: Book
       {!!duplicates.length && <section className="notice"><h3>ISBN זה כבר נמצא בספרייה</h3>{duplicates.map(match => <div key={match.id}><p>{match.title ?? 'ללא שם'}</p><div className="actions"><button type="button" onClick={() => onOpen(match)}>פתיחת הספר הקיים</button><button type="button" onClick={async () => { setBusy(true); try { await changeCopy(db, match.id, match.revision, {}); onClose(); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); } }}>הוספת עותק לספר הקיים</button></div></div>)}<button type="button" className="secondary" onClick={() => void save(undefined, true)}>שמירה כספר נפרד</button></section>}
       <div className="actions"><button type="submit">{busy ? 'שומר…' : 'שמירת הספר'}</button></div>
     </fieldset></form>
+    {book && <BookLoans book={book} copies={copies} disabled={busy || dirty || !!dirtyCopyId} onBusy={setBusy} />}
     {book && <section className="copies-section"><h3>עותקים ({copies.length})</h3><p className="hint">עריכה והוספת עותק שומרות גם את הפרטים שמופיעים למעלה.</p>{copies.map(copy => <CopyEditor key={copy.id} copy={copy} disabled={busy || (!!dirtyCopyId && dirtyCopyId !== copy.id)} onDirty={() => { setDirty(true); setDirtyCopyId(copy.id); }} onSave={async values => {
       setBusy(true); try { await db.transaction('rw', [db.books, db.copies, db.authors, db.images, db.loans, db.shelves, db.bookShelves, db.genres, db.tags, db.series], async () => { const updated = await saveBook(db, input, book, image); await changeCopy(db, book.id, updated.revision, { id: copy.id, ...values }); }); onOpen((await db.books.get(book.id))!); } finally { setBusy(false); }
     }} />)}<button type="button" className="secondary" disabled={busy || !!dirtyCopyId} onClick={async () => { setBusy(true); setError(''); try { await db.transaction('rw', [db.books, db.copies, db.authors, db.images, db.loans, db.shelves, db.bookShelves, db.genres, db.tags, db.series], async () => { const updated = await saveBook(db, input, book, image); await changeCopy(db, book.id, updated.revision, {}); }); onOpen((await db.books.get(book.id))!); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); } }}>הוספת עותק</button>

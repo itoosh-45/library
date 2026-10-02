@@ -72,7 +72,7 @@ it('basic snapshot restores exact book/copy/author/settings data and identity', 
 it('bad versions, secrets, invalid types, orphan relations and inconsistent counts are rejected without writes', async () => {
   await saveBook(database, emptyInput); const before = await createSnapshot(database);
   const edits = [
-    (b: ReturnType<typeof JSON.parse>) => { b.version = 3; },
+    (b: ReturnType<typeof JSON.parse>) => { b.version = 99; },
     (b: ReturnType<typeof JSON.parse>) => { b.data.books[0].apiKey = 'synthetic-forbidden'; },
     (b: ReturnType<typeof JSON.parse>) => { b.data.copies[0].bookId = crypto.randomUUID(); },
     (b: ReturnType<typeof JSON.parse>) => { b.data.books[0].readStatus = ['read']; },
@@ -120,6 +120,6 @@ it('delete removes only the selected book and copies after a safety snapshot', a
   expect(await database.books.toArray()).toEqual([second]); expect(await database.copies.count()).toBe(1); expect(await database.authors.count()).toBe(1);
 });
 it('basic snapshot refuses unsupported future-stage data rather than dropping it', async () => {
-  await database.people.add({ id: crypto.randomUUID(), name: 'בדיקה', normalizedName: 'בדיקה', archivedAt: null });
-  await expect(createSnapshot(database)).rejects.toThrow('אינו תומך'); expect(await database.people.count()).toBe(1);
+  await database.metadataSources.add({ id: crypto.randomUUID() } as never);
+  await expect(createSnapshot(database)).rejects.toThrow('אינו תומך'); expect(await database.metadataSources.count()).toBe(1);
 });

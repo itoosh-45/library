@@ -127,7 +127,7 @@ it('legacy phase 4 v1 backup restores and clears stage 5 collections atomically'
   await saveBook(database, { ...emptyInput, title: 'גיבוי ישן' });
   const old = await editedSnapshot(value => {
     value.version = 1; value.schemaVersion = 1; value.appVersion = '0.2.0';
-    for (const key of ['shelves', 'bookShelves', 'series', 'genres', 'tags']) { delete value.data[key]; delete value.counts[key]; }
+    for (const key of ['shelves', 'bookShelves', 'series', 'genres', 'tags', 'people', 'loans']) { delete value.data[key]; delete value.counts[key]; }
   });
   const incoming = await validateBackup(old); expect(incoming.counts.shelves).toBe(0);
   await fixture(); await restoreSnapshot(database, incoming, (await createSnapshot(database)).fingerprint);

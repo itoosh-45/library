@@ -8,4 +8,6 @@ App 0.17.1 מקבל token של 20–4096 תווי ASCII נראים, כולל ס�
 
 ביקורת: נכונות — אותה בדיקת header ב־session ובגבול UI; קריאות — נרמול קצר והודעה שאינה קובעת שהספק דחה מפתח; מבנה — תיקון במנגנון הקיים ללא תלות חדשה; אבטחה — ללא רווחי header/תוכן שגיאה/שמירה/רשת בהגדרה, שומר Free ו־consent; ביצועים — חסם 4096. קבלת token מקומית אינה מוכיחה אימות חי, והוא נשאר לבדיקת המשתמש בלי חשיפת מפתח.
 
-תוצאת פרסום תתווסף לאחר אימות ב־Pages.
+lint/typecheck/build עברו. מקור f5ce456ef57ea1f9fc00e4457fcf3b7572e60f04 ו־[CI](https://github.com/itoosh-45/library/actions/runs/37140115565) עברו. [Pages](https://github.com/itoosh-45/library/actions/runs/37140206429) פורסם בהצלחה ב־commit b88b519373d8cecce51753c6c0e9ce5d01cfcbbf. היסטוריית פרסום שלב 21 שולבה לפני push; אין force push או שינוי ארכיון המצלמה.
+
+בדיקת קלט המפתח עברה גם ב־HTTPS האמיתי (5.5 שניות), ללא בקשות ספק. smoke production עבר (13.3 שניות): כל 21 קבצי האתר זהים ב־SHA256 לבנייה, ספר סינתטי, JSON ושחזור מוגן, hash route, service worker scope ואופליין. PRODUCTION_MANIFEST=private/gemini-key-fix-manifest.json; snapshot ו־manifest נשארים ignored. KEY_TEST_PUBLIC=1 מפעיל את רגרסיית קלט המפתח על האתר הציבורי. תרחיש מפתח המשתמש עצמו עדיין לא נבדק והגורם המדויק בקלט שלו אינו ידוע. יש להחיל עדכון PWA דרך ההגדרות ולהדביק מחדש את המפתח האישי בממשק בלבד; אין למחוק אחסון או לשלוח אותו בצ׳אט.

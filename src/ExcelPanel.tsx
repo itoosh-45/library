@@ -44,10 +44,10 @@ export default function ExcelPanel() {
     } catch (error) { setSafety(undefined); setConfirmed(false); throw error; }
   }
   return <section className="backup-panel excel-panel" data-update-blocked={busy || Boolean(input) ? 'true' : undefined}><h3>Excel — יצוא וייבוא טבלאיים</h3>
-    <p>Excel מעביר את הנתונים הטבלאיים והיסטוריית ההשאלות. ImageRefs מכיל הפניות בלבד; תמונות וטִיוטות צילום מדף דורשות גיבוי JSON. הקובץ כולל מידע אישי ואינו מוצפן.</p>
+    <p>Excel מעביר את הנתונים הטבלאיים והיסטוריית ההשאלות. ImageRefs מכיל הפניות בלבד; תמונות וטִיוטות צילום מדף דורשות גיבוי JSON. בגיליון Books מופיעים גם שמות המחברים, המדפים, הז׳אנרים, התגיות, הסדרה והדירוג. עמודות השמות הן לתצוגה; עריכת שיוכים נעשית בגיליונות הקשרים.</p>
     <fieldset disabled={busy}>
-      <button type="button" onClick={() => void action(async () => { const output = await exportWorkbook(db); downloadWorkbook(output.bytes, 'library-tables'); setMessage('הופק קובץ Excel. ודא ששמרת אותו; תמונות אינן כלולות.'); })}>יצוא הספרייה ל־Excel</button>
-      <button type="button" className="secondary" onClick={() => { downloadWorkbook(writeWorkbook(simpleWorkbook()), 'Books-template'); setMessage('בתבנית יש שורת דוגמה: מחק אותה לפני הייבוא. מחברים מופרדים באמצעות ; ותאריכים הם טקסט ISO.'); }}>הורדת תבנית Books פשוטה</button>
+      <button type="button" onClick={() => void action(async () => { const output = await exportWorkbook(db); await downloadWorkbook(output.bytes, 'library-tables'); setMessage('הופק קובץ Excel. ודא ששמרת אותו; תמונות אינן כלולות.'); })}>יצוא הספרייה ל־Excel</button>
+      <button type="button" className="secondary" onClick={() => void action(async () => { await downloadWorkbook(writeWorkbook(simpleWorkbook()), 'Books-template'); setMessage('בתבנית יש שורת דוגמה: מחק אותה לפני הייבוא. מחברים מופרדים באמצעות ; ותאריכים הם טקסט ISO.'); })}>הורדת תבנית Books פשוטה</button>
       <a href={`${import.meta.env.BASE_URL}templates/full-example.xlsx`} download>הורדת דוגמה מלאה סינתטית</a>
       <label className="field">בחירת Excel לייבוא<input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void action(() => inspect(file)); }} /></label>
       {input && !input.full && <section><h4>מיפוי עמודות — {input.sheet}</h4><p>בחר שדה לכל עמודה או התעלם ממנה. מזהים כמו ISBN ודאנאקוד חייבים להיות תאי טקסט כדי לשמור אפסים מובילים. מייבאים ערכים בלבד; אין הרצת נוסחאות.</p>

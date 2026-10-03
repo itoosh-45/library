@@ -5,7 +5,7 @@ export function safeCatalogCoverUrl(value: unknown, provider?: string): value is
     const url = new URL(value);
     if (url.protocol !== 'https:' || url.username || url.password || url.port || url.hash) return false;
     if (url.hostname === 'covers.openlibrary.org' && (!provider || provider === 'openlibrary')) {
-      return /^\/b\/id\/[1-9]\d{0,11}-[MSL]\.jpg$/.test(url.pathname) && url.search === '?default=false';
+      return /^\/b\/(?:id\/[1-9]\d{0,11}|isbn\/(?:\d{13}|\d{9}[\dX]))-[MSL]\.jpg$/.test(url.pathname) && url.search === '?default=false';
     }
     if (url.hostname === 'books.google.com' && (!provider || provider === 'googlebooks')) {
       const allowed = ['id', 'printsec', 'img', 'zoom', 'source', 'jscmd', 'h', 'w', 'edge'];

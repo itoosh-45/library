@@ -35,16 +35,16 @@ export async function prepareImage(file: File): Promise<StoredImage> {
     const image = new Image(); image.src = url;
     try { await image.decode(); } catch { throw new LibraryValidationError('הדפדפן לא מצליח לקרוא את התמונה. שמור אותה כ־JPEG או PNG ונסה שוב.'); }
     if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth * image.naturalHeight > 60000000) throw new LibraryValidationError('ממדי התמונה גדולים מדי.');
-    const ratio = Math.min(1, 1200 / Math.max(image.naturalWidth, image.naturalHeight));
+    const ratio = Math.min(1, 800 / Math.max(image.naturalWidth, image.naturalHeight));
     const canvas = document.createElement('canvas'); canvas.width = Math.max(1, Math.round(image.naturalWidth * ratio)); canvas.height = Math.max(1, Math.round(image.naturalHeight * ratio));
     const context = canvas.getContext('2d'); if (!context) throw new Error('לא ניתן להכין תמונה.');
     context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(image, 0, 0, canvas.width, canvas.height);
     let blob: Blob | null = null;
-    for (const quality of [0.85, 0.7, 0.5, 0.3]) {
+    for (const quality of [0.7, 0.55, 0.4, 0.3]) {
       blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
-      if (blob && blob.size <= 1024 * 1024) break;
+      if (blob && blob.size <= 250 * 1024) break;
     }
-    if (!blob || blob.size > 1024 * 1024) throw new LibraryValidationError('לא ניתן להקטין את התמונה מספיק. בחר תמונה אחרת.');
+    if (!blob || blob.size > 250 * 1024) throw new LibraryValidationError('לא ניתן להקטין את התמונה מספיק. בחר תמונה אחרת.');
     return { id: crypto.randomUUID(), blob, mimeType: 'image/jpeg', width: canvas.width, height: canvas.height, byteLength: blob.size, sha256: await hashBytes(await blob.arrayBuffer()), sourceUrl: null, createdAt: new Date().toISOString() };
   } finally { URL.revokeObjectURL(url); }
 }

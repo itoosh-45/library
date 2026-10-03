@@ -5,7 +5,7 @@ import { createSnapshot, readCore, restoreSnapshot } from './backup';
 import { emptyInput, saveBook, changeCopy } from './books';
 import { saveNamedItem, saveShelf } from './collections';
 import { lendCopy, returnCopy, localDay } from './loans';
-import { fullWorkbook, exportWorkbook, readWorkbook, writeWorkbook, fullWorkbookCandidate, simpleWorkbook } from './xlsxWorkbook';
+import { fullWorkbook, exportWorkbook, readWorkbook, writeWorkbook, fullWorkbookCandidate, simpleWorkbook, downloadWorkbook } from './xlsxWorkbook';
 import { simpleWorkbookCandidate } from './xlsxSimple';
 import { suggestedMapping } from './xlsxSchema';
 import { mergeSnapshot, previewMerge } from './backupMerge';
@@ -174,4 +174,27 @@ it('edited titles rebuild sort keys and mark selected catalog fields as overridd
   spaced.Sheets.Books['!ref'] = 'A1:I4'; spaced.Sheets.Books.E4 = { t: 'n', v: -1 };
   const input = await readWorkbook(writeWorkbook(spaced));
   await expect(simpleWorkbookCandidate(db, input, suggestedMapping(input.headers))).rejects.toMatchObject({ issues: [{ sheet: 'Books', row: 4, column: 'copies' }] });
+});
+
+
+it('Excel v2 includes ratings and readable shelf names and still accepts the released v1 template', async () => {
+  const source = await richLibrary(), target = await library();
+  const book = (await source.books.toArray())[0]; await source.books.update(book.id, { rating: 5 });
+  const input = await readWorkbook((await exportWorkbook(source)).bytes);
+  expect(input.workbook.SheetNames[0]).toBe('Books');
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(input.workbook.Sheets.Books);
+  expect(rows[0]).toMatchObject({ rating: 5, shelfNames: 'מדף מלא; ילד', genreNames: 'סיפורת', tagNames: 'עברית', seriesName: 'סדרה' });
+  const candidate = await fullWorkbookCandidate(target,input); expect(candidate.backup.data.books[0].rating).toBe(5);
+  await restoreSnapshot(target,candidate.backup,(await createSnapshot(target)).fingerprint);
+  expect((await target.books.get(book.id))?.rating).toBe(5);
+  const oldBytes = new Uint8Array(await readFile('public/templates/full-example.xlsx'));
+  expect((await fullWorkbookCandidate(target,await readWorkbook(oldBytes))).backup.counts.books).toBeGreaterThan(0);
+});
+
+it('Excel download uses an Android bridge when present and preserves XLSX bytes', async () => {
+  const source = await richLibrary(), { bytes } = await exportWorkbook(source);
+  const saveExcelFile = vi.fn(); vi.stubGlobal('window', { AndroidBridge: { saveExcelFile } });
+  try { await downloadWorkbook(bytes,'library-tables'); expect(saveExcelFile).toHaveBeenCalledOnce();
+    const [base64, filename] = saveExcelFile.mock.calls[0]; expect(filename).toBe('library-tables.xlsx'); expect(Buffer.from(base64,'base64')).toEqual(Buffer.from(bytes));
+  } finally { vi.unstubAllGlobals(); }
 });

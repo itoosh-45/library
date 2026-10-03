@@ -5,7 +5,7 @@ import { validateReview } from './draftReviewValues';
 import { LibraryValidationError } from './library';
 import { changeCopy, duplicateBooks } from './books';
 import { inputFieldValue, saveBookSelections } from './catalogSave';
-import { recognitionMetadataFields, recognitionValues, shelfRecognitionVersion } from './recognition';
+import { recognitionMetadataFields, recognitionModels, recognitionValues, shelfRecognitionVersion } from './recognition';
 import { validateMetadataSource } from './metadata';
 
 const fail = (message: string): never => { throw new LibraryValidationError(message); };
@@ -57,7 +57,7 @@ export async function previewApproved(database: LibraryDatabase, draftId: string
 }
 function imageSource(draft: RecognitionDraft, item: DraftItem, bookId: string, applied: boolean): MetadataSource {
   const imageHash = draft.images.find(image => image.id === item.imageId)!.preparedHash!, selected = applied ? recognitionMetadataFields(item.item, item.selectedFields) : [], fields = recognitionValues(item.item);
-  const source: MetadataSource = { id: crypto.randomUUID(), bookId, provider: 'gemini', recordId: `${item.model}/${shelfRecognitionVersion}/${imageHash}/${item.id}`, sourceUrl: null, fetchedAt: item.fetchedAt, fieldValues: fields, selectedFields: selected, userOverriddenFields: selected.filter(field => JSON.stringify(inputFieldValue(item.review!.input, field)) !== JSON.stringify(fields[field])), recognition: { version: shelfRecognitionVersion, model: item.model, imageHash, item: item.item, batchId: draft.batchId, itemId: item.id } };
+  const source: MetadataSource = { id: crypto.randomUUID(), bookId, provider: item.model === recognitionModels.groq ? 'groq' : item.model === recognitionModels.ocr ? 'ocr' : 'gemini', recordId: `${item.model}/${shelfRecognitionVersion}/${imageHash}/${item.id}`, sourceUrl: null, fetchedAt: item.fetchedAt, fieldValues: fields, selectedFields: selected, userOverriddenFields: selected.filter(field => JSON.stringify(inputFieldValue(item.review!.input, field)) !== JSON.stringify(fields[field])), recognition: { version: shelfRecognitionVersion, model: item.model, imageHash, item: item.item, batchId: draft.batchId, itemId: item.id } };
   return validateMetadataSource(source);
 }
 export async function saveApproved(database: LibraryDatabase, preview: ApprovedPreview): Promise<{ saved: number; bookIds: string[]; copyIds: string[] }> {

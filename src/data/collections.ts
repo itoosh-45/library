@@ -83,6 +83,7 @@ export async function saveNamedItem(database: LibraryDatabase, kind: CollectionK
 export async function deleteNamedItem(database: LibraryDatabase, kind: CollectionKind, expected: NamedItem): Promise<void> {
   await database.transaction('rw', [database.table(kind), database.books], async () => {
     checkCurrent(await database.table(kind).get(expected.id), expected);
+    if (kind === 'genres' && await database.books.filter(book => book.genreIds.includes(expected.id)).count()) throw new LibraryValidationError('הז׳אנר משויך לספרים. הסר את השיוכים לפני המחיקה.');
     const now = new Date().toISOString();
     await database.books.toCollection().modify(book => {
       const affected = kind === 'series' ? book.seriesId === expected.id : book[kind === 'tags' ? 'tagIds' : 'genreIds'].includes(expected.id);

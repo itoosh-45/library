@@ -64,9 +64,37 @@ test('T24 production CSP permits local image preparation and only the mocked app
   await page.goto('./'); await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
   await page.getByRole('button', { name: 'הוספה מתמונה · ספרים או ברקודים', exact: true }).click();
   const png = await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 600; canvas.height = 800; canvas.getContext('2d')!.fillRect(0,0,600,800); return canvas.toDataURL('image/png').split(',')[1]; });
-  await key(page);
+  await page.getByLabel('דרך הזיהוי',{exact:true}).selectOption('auto');await key(page);
   await page.getByLabel('בחירת תמונת ספר', { exact: true }).setInputFiles({ name: 'SYNTHETIC.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
   await expect(page.getByRole('heading', { name: 'ספרים שזוהו (1)', exact: true })).toBeVisible();
   expect(requests).toHaveLength(1); expect(requests[0]).not.toContain(canary);
   await expect(page.getByRole('button', { name: 'הוספת 1 ספרים לספרייה' })).toBeEnabled();
+});
+
+
+test('production OCR runs real Hebrew/English worker locally under CSP and saves backup evidence',async({page,context})=>{
+  test.setTimeout(120000);const violations:string[]=[];const cloud:string[]=[];
+  await page.addInitScript(()=>{document.addEventListener('securitypolicyviolation',event=>console.error('CSP_OCR:'+event.violatedDirective));});
+  page.on('console',message=>{if(message.text().includes('CSP_OCR:'))violations.push(message.text());});
+  await page.route('https://openlibrary.org/**',route=>route.fulfill({json:{docs:[]}}));
+  await page.route(/https:\/\/(?:generativelanguage.googleapis.com|api.groq.com)\//,route=>{cloud.push(route.request().url());return route.abort();});
+  await page.goto('./');const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=900;c.height=1200;const ctx=c.getContext('2d')!;ctx.fillStyle='#fff';ctx.fillRect(0,0,900,1200);ctx.fillStyle='#111';ctx.font='bold 76px Arial';ctx.fillText('THE LIBRARY',125,350);ctx.font='36px Arial';ctx.fillText('by JOHN SMITH',250,445);return c.toDataURL('image/png').split(',')[1];});
+  await page.getByRole('button',{name:'הוספת ספר',exact:true}).click();await page.getByRole('button',{name:'הוספה מתמונה · ספרים או ברקודים',exact:true}).click();
+  await page.getByLabel('בחירת תמונת ספר',{exact:true}).setInputFiles({name:'SYNTHETIC-OCR.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
+  await expect(page.getByRole('heading',{name:'ספרים שזוהו (1)',exact:true})).toBeVisible({timeout:95000});
+  await expect(page.locator('.image-book-results > li > details > summary')).toContainText('THE LIBRARY');
+  await page.getByRole('button',{name:'הוספת 1 ספרים לספרייה',exact:true}).click();await page.getByRole('link',{name:'הגדרות',exact:true}).click();await page.getByText('גיבוי ושחזור הספרייה',{exact:true}).click();
+  const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'הורדת גיבוי הספרייה',exact:true}).click();const backup=JSON.parse(await readFile((await(await downloading).path())!,'utf8'));
+  expect(backup.formatVersion).toBe(10);expect(backup.tables.metadataSources[0].provider).toBe('ocr');expect(cloud).toEqual([]);expect(violations).toEqual([]);
+  await expect.poll(()=>page.evaluate(()=>!!navigator.serviceWorker.controller)).toBe(true);await context.setOffline(true);await page.goto('./');await page.getByRole('button',{name:'הוספת ספר',exact:true}).click();await page.getByRole('button',{name:'הוספה מתמונה · ספרים או ברקודים',exact:true}).click();await page.getByLabel('בחירת תמונת ספר',{exact:true}).setInputFiles({name:'SYNTHETIC-OFFLINE.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});await expect(page.getByRole('heading',{name:'ספרים שזוהו (1)',exact:true})).toBeVisible({timeout:95000});expect(violations).toEqual([]);
+});
+
+
+test('production CSP allows mocked Groq fallback after Gemini server failure',async({page})=>{
+ const calls:string[]=[];await page.route('https://openlibrary.org/**',route=>route.fulfill({json:{docs:[]}}));
+ await page.route('https://generativelanguage.googleapis.com/**',route=>{calls.push('gemini');return route.fulfill({status:503,body:''});});
+ const item={title:'Groq CSP test',authors:[],isbn:null,danacode:null,publisher:null,visibleText:'Groq CSP test',evidenceByField:{title:['Groq CSP test'],authors:[],isbn:[],danacode:[],publisher:[]},imageIndex:0,bbox:[0,0,1,1],uncertaintyReasons:[]};
+ await page.route('https://api.groq.com/**',route=>{calls.push('groq');return route.fulfill({json:{choices:[{finish_reason:'stop',message:{content:JSON.stringify({items:[item]})}}]}});});
+ await page.goto('./#settings');await page.getByText('זיהוי ספר מתמונה · Gemini',{exact:true}).click();await key(page);await page.getByText('Groq · גיבוי לזיהוי תמונות',{exact:true}).click();await page.getByLabel('מפתח Groq אישי',{exact:true}).fill('SYNTHETIC-GROQ-KEY-NEVER-LIVE');await page.getByLabel('בדקתי שחשבון Groq במסלול Free ללא חיוב פעיל',{exact:true}).check();await page.getByLabel('אני מסכים לשליחת תמונות ל-Groq כגיבוי ל-Gemini',{exact:true}).check();await page.getByRole('button',{name:'שמירת מפתח Groq',exact:true}).click();await page.getByRole('link',{name:'כל הספרים',exact:true}).click();
+ const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=240;c.height=360;c.getContext('2d')!.fillRect(0,0,240,360);return c.toDataURL('image/png').split(',')[1];});await page.getByRole('button',{name:'הוספת ספר',exact:true}).click();await page.getByRole('button',{name:'הוספה מתמונה · ספרים או ברקודים',exact:true}).click();await page.getByLabel('בחירת תמונת ספר',{exact:true}).setInputFiles({name:'SYNTHETIC.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});await expect(page.getByRole('heading',{name:'ספרים שזוהו (1)',exact:true})).toBeVisible();expect(calls).toEqual(['gemini','groq']);
 });

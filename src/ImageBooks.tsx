@@ -1,15 +1,16 @@
+import { findRecognizedCandidate } from './data/recognizedCatalog';
 import { GenreField } from './GenreField';
 import { useEffect, useRef, useState } from 'react';
 import { CatalogPanel } from './CatalogPanel';
-import { openLibraryAdapter, emptyQuery } from './data/catalog';
-import { downloadCatalogCover } from './data/catalogCover';
+import { openLibraryAdapter } from './data/catalog';
+import { downloadBookCover } from './data/catalogCover';
 import type { StoredImage } from './data/models';
 import { Thumbnail } from './BookEditor';
 import { Sheet } from './Sheet';
 import VisionKey from './VisionKey';
 import { SimpleShelfField } from './SimpleShelfField';
 import { db } from './data/database';
-import { emptyInput, duplicateBooks, comparableISBN, parseISBN, type BookInput } from './data/books';
+import { emptyInput, duplicateBooks, type BookInput } from './data/books';
 import { applyCatalogCandidate, saveBookSelections, type CatalogSelection, type RecognitionSelection } from './data/catalogSave';
 import { recognitionFields, recognitionInput, recognitionMetadataFields } from './data/recognition';
 import { personalVisionSession } from './data/vision';
@@ -18,16 +19,17 @@ import { hashBytes } from './data/images';
 import { errorMessage } from './data/errors';
 import { useOnline } from './pwa';
 
-interface ImageBook { selection: RecognitionSelection; input: BookInput; included: boolean; duplicate: boolean; catalogs: CatalogSelection[]; cover?: StoredImage }
+interface ImageBook { selection: RecognitionSelection; input: BookInput; included: boolean; duplicate: boolean; catalogs: CatalogSelection[]; cover?: StoredImage; coverMessage?:string }
 export default function ImageBooks({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const online = useOnline();
-  const [ready, setReady] = useState(personalVisionSession.ready);
+  const [, setReady] = useState(personalVisionSession.ready);
   const [image, setImage] = useState<PreparedVisionImage>();
   const [rows, setRows] = useState<ImageBook[]>([]), [shelf, setShelf] = useState<BookInput>({ ...emptyInput });
   const [catalogBusy, setCatalogBusy] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false), [saving, setSaving] = useState(false), [message, setMessage] = useState('');
   const [catalog] = useState(() => openLibraryAdapter());
   const lookup = useRef<AbortController | undefined>(undefined);
+  const [method,setMethod]=useState<'auto'|'local'>(personalVisionSession.hasKey?'auto':'local');
   const sequence = useRef(0), preview = useRef<HTMLImageElement>(null);
   useEffect(() => () => { sequence.current++; lookup.current?.abort(); personalVisionSession.cancel(); }, []);
   useEffect(() => { if (!image) return; const url = URL.createObjectURL(image.blob); if (preview.current) preview.current.src = url; return () => URL.revokeObjectURL(url); }, [image]);
@@ -36,7 +38,7 @@ export default function ImageBooks({ onClose, onSaved }: { onClose: () => void; 
     setMessage('מזהה את הספרים בתמונה…');
     const imageHash = await hashBytes(await prepared.blob.arrayBuffer());
     if (request !== sequence.current) return;
-    const outcome = await personalVisionSession.recognize(prepared.blob, () => setMessage('מנסה את מודל הגיבוי שאושר…'), 'shelf');
+    const outcome = await personalVisionSession.recognize(prepared.blob, reason => { if(request===sequence.current) setMessage(reason ?? 'מנסה זיהוי חלופי…'); }, 'shelf', method==='local');
     if (request !== sequence.current) return;
     const fetchedAt = new Date().toISOString(), found: ImageBook[] = [];
     for (const item of outcome.result.items) {
@@ -45,22 +47,20 @@ export default function ImageBooks({ onClose, onSaved }: { onClose: () => void; 
       let input = recognitionInput({ ...emptyInput }, item, selected);
       const duplicate = (await duplicateBooks(db, input)).length > 0 || !!input.isbn && found.some(row => row.input.isbn === input.isbn);
       const row: ImageBook = { input, included: !duplicate, duplicate, catalogs: [], selection: { item, selected, model: outcome.model, imageHash, fetchedAt } };
-      if (input.isbn && !duplicate && navigator.onLine) {
+      if ((input.isbn || input.title) && !duplicate && navigator.onLine) {
         const controller = new AbortController(); lookup.current = controller;
         const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]);
         try {
           setMessage(`מחפש פרטים וכריכה לספר ${found.length + 1}…`);
-          const candidates = await catalog.search({ ...emptyQuery, isbn: input.isbn }, signal);
-          for (const candidate of candidates.slice(0, 3)) {
-            const resolved = await catalog.resolve!(candidate, signal);
-            if (![resolved.fields.isbn13, resolved.fields.isbn10].some(code => typeof code === 'string' && comparableISBN(parseISBN(code)) === comparableISBN(parseISBN(input.isbn)))) continue;
-            const applied = applyCatalogCandidate(input, resolved); input = applied.draft; row.input = input;
-            row.catalogs = [{ candidate: resolved, selected: applied.fields }];
-            row.selection.selected = row.selection.selected.filter(field => !recognitionMetadataFields(item, [field]).some(metadata => applied.fields.includes(metadata)));
-            if (resolved.coverUrl) { try { row.cover = await downloadCatalogCover(resolved.coverUrl, signal); } catch { /* Keep the recognized details when a cover is unavailable. */ } }
-            break;
+          const resolved=await findRecognizedCandidate(input,catalog,signal);
+          if(resolved) {
+            const applied=applyCatalogCandidate(input,resolved);input=applied.draft;row.input=input;
+            row.catalogs=[{candidate:resolved,selected:applied.fields}];
+            row.selection.selected=row.selection.selected.filter(field=>!recognitionMetadataFields(item,[field]).some(metadata=>applied.fields.includes(metadata)));
           }
-        } catch { /* A catalog outage must not lose the recognized identifier. */ }
+          try { row.cover=await downloadBookCover(resolved?.coverUrl,input.isbn,signal); }
+          catch { row.coverMessage='לא נמצאה כריכה זמינה בקטלוג. ניתן להוסיף צילום כריכה או לחפש בפרטים.'; }
+        } catch { try { row.cover=await downloadBookCover(undefined,input.isbn,signal); } catch { row.coverMessage='הכריכה לא נטענה. אפשר לחפש שוב בפרטים או להעלות צילום כריכה.'; } }
       }
       if (request !== sequence.current) return;
       found.push(row);
@@ -85,19 +85,19 @@ export default function ImageBooks({ onClose, onSaved }: { onClose: () => void; 
           try { prepared = await prepareVisionImage(source); } finally { source.dispose(); }
           if (request !== sequence.current) return;
           setImage(prepared);
-          if (!personalVisionSession.ready || !navigator.onLine) { setMessage('התמונה מוכנה. הגדר מפתח Gemini וחיבור לרשת כדי לזהות.'); return; }
+          if (method==='auto' && !personalVisionSession.hasKey) { setMessage('התמונה מוכנה. הגדר מפתח Gemini וחיבור לרשת כדי לזהות.'); return; }
           await recognize(prepared, request);
         } catch (error) {
           if (request !== sequence.current) return;
           errors.push(`תמונה ${index + 1}: ${errorMessage(error)}`);
-          if (!personalVisionSession.ready || !navigator.onLine) break;
+          if (method==='auto' && !personalVisionSession.hasKey) break;
         }
       }
       if (request === sequence.current && errors.length) setMessage(errors.join(' '));
     } finally { if (request === sequence.current) { setBusy(false); setReady(personalVisionSession.ready); } }
   }
   async function retry() {
-    if (!image || !navigator.onLine) return;
+    if (!image) return;
     const request = ++sequence.current; setBusy(true);
     try { await recognize(image, request); }
     catch (error) { if (request === sequence.current) setMessage(errorMessage(error)); }
@@ -120,13 +120,14 @@ export default function ImageBooks({ onClose, onSaved }: { onClose: () => void; 
   return <Sheet title="הוספה מתמונה" onClose={onClose} busy={saving || catalogBusy.size > 0} dirty={rows.length > 0}>
     <div className="image-books">
       {!rows.length && <p>ספרים, שדרות או ברקודים — אפשר לבחור כמה תמונות. התוצאות יופיעו יחד לבחירה.</p>}
-      {!ready && <VisionKey onChange={value => { setReady(value); setRows([]); }} />}
-      <div className="image-pick"><label className="image-pick-action">בחירת תמונות<input aria-label="בחירת תמונת ספר" type="file" multiple accept="image/*" disabled={!ready || !online || busy || saving || catalogBusy.size > 0} onChange={event => { void choose(event.target.files); event.target.value = ''; }} /></label><label className="image-pick-action">צילום במצלמה<input aria-label="צילום ספר במצלמה" type="file" accept="image/*" capture="environment" disabled={!ready || !online || busy || saving || catalogBusy.size > 0} onChange={event => { void choose(event.target.files); event.target.value = ''; }} /></label></div>
+      <label className="field">דרך הזיהוי<select aria-label="דרך הזיהוי" value={method} disabled={busy||saving} onChange={event=>setMethod(event.target.value as 'auto'|'local')}><option value="auto">Gemini · Groq · OCR כגיבוי</option><option value="local">OCR מקומי · ללא API</option></select></label>
+      {!personalVisionSession.hasKey && method==='auto' && <VisionKey onChange={value => { setReady(value); if(value)setMethod('auto'); setRows([]); }} />}
+      <div className="image-pick"><label className="image-pick-action">בחירת תמונות<input aria-label="בחירת תמונת ספר" type="file" multiple accept="image/*" disabled={method==='auto' && !personalVisionSession.hasKey || busy || saving || catalogBusy.size > 0} onChange={event => { void choose(event.target.files); event.target.value = ''; }} /></label><label className="image-pick-action">צילום במצלמה<input aria-label="צילום ספר במצלמה" type="file" accept="image/*" capture="environment" disabled={method==='auto' && !personalVisionSession.hasKey || busy || saving || catalogBusy.size > 0} onChange={event => { void choose(event.target.files); event.target.value = ''; }} /></label></div>
       {image && !rows.length && <img ref={preview} className="image-books-preview" width={image.width} height={image.height} alt="תמונה מוכנה לשליחה לזיהוי" />}
       {busy && <button className="secondary" onClick={cancel}>ביטול הזיהוי</button>}
       <p role="status" aria-live="polite">{message}</p>
-      {!online && <p>הזיהוי דורש חיבור לרשת. התמונה נשארת כאן.</p>}
-      {image && !busy && !rows.length && <button disabled={!ready || !online} onClick={() => void retry()}>זיהוי הספרים בתמונה</button>}
+      {!online && <p>אין חיבור לרשת. ניתן לקרוא טקסט ב-OCR המקומי; חיפוש פרטים וכריכות יחזור כשהרשת זמינה.</p>}
+      {image && !busy && !rows.length && <button disabled={method==='auto' && !personalVisionSession.hasKey} onClick={() => void retry()}>זיהוי הספרים בתמונה</button>}
       {!!rows.length && <fieldset disabled={saving || busy || catalogBusy.size > 0}>
         <h3>ספרים שזוהו ({rows.length})</h3>
         <SimpleShelfField input={shelf} onChange={setShelf} />
@@ -143,6 +144,7 @@ export default function ImageBooks({ onClose, onSaved }: { onClose: () => void; 
             <p className="hint">{row.selection.item.visibleText}</p>
             <CatalogPanel simple onBusy={value => setCatalogBusy(old => { if (old.has(index) === value) return old; const next = new Set(old); if (value) next.add(index); else next.delete(index); return next; })} input={row.input} fetchCover disabled={busy || saving || catalogBusy.size > 0} onApply={(input, candidate, selected, cover) => setRows(old => old.map((value, i) => i === index ? { ...value, input, cover: cover ?? value.cover, catalogs: [{ candidate, selected }], selection: { ...value.selection, selected: value.selection.selected.filter(field => !recognitionMetadataFields(value.selection.item, [field]).some(metadata => selected.includes(metadata))) } } : value))} />
           </details>
+          {row.coverMessage && !row.cover && <p className="hint">{row.coverMessage}</p>}
           {row.duplicate && <p className="hint">מזהה שכבר קיים. השאר ללא בחירה או תקן את המזהה בפרטים.</p>}
         </li>)}</ul>
         <p className="hint">רק הספרים שסימנת יישמרו. הזיהוי עשוי להחמיץ ספרים או לטעות בפרטים.</p>

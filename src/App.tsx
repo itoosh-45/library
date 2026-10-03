@@ -6,6 +6,8 @@ import { errorMessage } from './data/errors';
 import type { Book } from './data/models';
 import { BookEditor } from './BookEditor';
 import { BookList, type BookListProps } from './BookList';
+import { NamedManagement } from './NamedManagement';
+import { ExcelLauncher } from './ExcelLauncher';
 import { ShelvesPanel } from './CollectionsPanel';
 import { BackupPanel } from './BackupPanel';
 import { OfflinePanel } from './OfflinePanel';
@@ -16,6 +18,7 @@ import { UserStatistics } from './UserStatistics';
 import { LoansPanel } from './LoansPanel';
 import { restoreBookFocus } from './focusRestore';
 import { useOnline } from './pwa';
+const GroqKey = lazy(() => import('./GroqKey'));
 const VisionKey = lazy(() => import('./VisionKey'));
 const sections = [{ id: 'books', label: 'כל הספרים' }, { id: 'shelves', label: 'מדפים' }, { id: 'loans', label: 'השאלות' }, { id: 'settings', label: 'הגדרות' }] as const;
 const currentSection = () => sections.find(item => item.id === location.hash.slice(1))?.id ?? 'books';
@@ -46,7 +49,7 @@ export function App() {
   const list: BookListProps = { ...data, books, compare: bookComparator(data, filters.sort, filters.descending), series: [], displayMode: 'compact', simple: true, onOpen: open };
   return <div className="app-shell simple-library">
     <a className="skip-link" href="#main-content" onClick={event => { event.preventDefault(); document.getElementById('main-content')?.focus(); }}>דילוג לתוכן</a>
-    <header className="simple-header"><strong>{data.name}</strong><a href="#settings" aria-current={section === 'settings' ? 'page' : undefined}>הגדרות</a></header>
+    <header className="simple-header"><strong>{data.name}</strong><a href="#settings" aria-current={section === 'settings' ? 'page' : undefined}> <svg className="settings-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 3-1 3-3 1-2 3 2 2-2 2 2 3 3 1 1 3h6l1-3 3-1 2-3-2-2 2-2-2-3-3-1-1-3Z"/><circle cx="12" cy="12" r="3"/></svg><span>הגדרות</span></a></header>
     <nav className="simple-nav" aria-label="ניווט ראשי">{sections.slice(0, 3).map(item => <a key={item.id} href={'#' + item.id} aria-current={section === item.id ? 'page' : undefined}>{item.label}</a>)}</nav>
     <main id="main-content" tabIndex={-1} className="simple-content">
       {!online && <p className="hint" role="status">אין חיבור לרשת. הספרים והמדפים זמינים במכשיר.</p>}
@@ -56,7 +59,7 @@ export function App() {
       {section === 'books' && <>{books.length ? <BookList {...list} /> : <div className="simple-empty"><h2>{query ? 'לא נמצאו ספרים' : 'כאן יופיעו הספרים שלך'}</h2><p>{query ? 'נסה שם אחר או נקה את החיפוש.' : 'הוסף ספר ראשון. מספיק להתחיל בשם.'}</p>{query && <button className="secondary" onClick={() => setQuery('')}>ניקוי החיפוש</button>}</div>}</>}
       {section === 'shelves' && <ShelvesPanel list={list} simple />}
       {section === 'loans' && <LoansPanel />}
-      {section === 'settings' && <div className="simple-settings"><LibraryNameForm name={data.name} /><details><summary>סטטיסטיקות הספרייה</summary><UserStatistics books={data.books} copies={data.copies} loans={data.loans} genres={data.genres} /></details><details><summary>זיהוי ספר מתמונה · Gemini</summary><Suspense fallback={<p role="status">טוען הגדרות…</p>}><VisionKey /></Suspense></details><details><summary>גיבוי ושחזור הספרייה</summary><BackupPanel /></details><details><summary>עדכון ואופליין</summary><OfflinePanel /></details></div>}
+      {section === 'settings' && <div className="simple-settings"><LibraryNameForm name={data.name} /><details><summary>סטטיסטיקות הספרייה</summary><UserStatistics books={data.books} copies={data.copies} loans={data.loans} genres={data.genres} shelves={data.shelves} /></details><details><summary>Excel · ייצוא וייבוא</summary><ExcelLauncher /></details><details><summary>ניהול ז׳אנרים</summary><NamedManagement kind="genres" /></details><details><summary>ניהול תגיות</summary><NamedManagement kind="tags" /></details><details><summary>זיהוי ספר מתמונה · Gemini</summary><Suspense fallback={<p role="status">טוען הגדרות…</p>}><VisionKey /></Suspense></details><details><summary>Groq · גיבוי לזיהוי תמונות</summary><Suspense fallback={<p role="status">טוען…</p>}><GroqKey /></Suspense></details><details><summary>OCR מקומי</summary><p>קריאת טקסט בעברית ובאנגלית לפי גודל ומיקום, ללא מפתח וללא מכסת סריקות. בחר ״OCR מקומי״ במסך ההוספה מתמונה. יש לבדוק את שם הספר והמחבר לפני השמירה.</p></details><details><summary>גיבוי ושחזור הספרייה</summary><BackupPanel /></details><details><summary>עדכון ואופליין</summary><OfflinePanel /></details></div>}
     </main>
     {editor && <BookEditor simple key={editor.key} book={editor.book} authorNames={editor.book?.authorIds.map(id => authors.get(id) ?? '') ?? []} onClose={close} onOpen={book => setEditor(previous => ({ book, key: (previous?.key ?? 0) + 1 }))} />}
   </div>;

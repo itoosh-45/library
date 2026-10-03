@@ -4,7 +4,7 @@ import { fullEnvelope } from './backupFormat';
 import type { LibraryDatabase } from './database';
 import { LibraryValidationError, normalizeText } from './library';
 import { guardXlsxZip, XLSX_LIMITS } from './xlsxZip';
-import { manifestColumns, workbookSchema, type ColumnType } from './xlsxSchema';
+import { manifestColumns, workbookSchema, legacyWorkbookSchema, bookDisplayColumns, type ColumnType } from './xlsxSchema';
 import { importId } from './xlsxIds';
 import { parseISBN, readingStates } from './books';
 import { safeSourceUrl, validateMetadataSource } from './metadata';
@@ -37,14 +37,14 @@ function addSheet(workbook: XLSX.WorkBook, name: string, headers: string[], rows
 export function fullWorkbook(core: Core): XLSX.WorkBook {
   const workbook = XLSX.utils.book_new();
   const manifest: Row[] = [
-    { key: 'format', value: 'my-library-xlsx' }, { key: 'templateVersion', value: '1' }, { key: 'dbSchemaVersion', value: '2' },
+    { key: 'format', value: 'my-library-xlsx' }, { key: 'templateVersion', value: '2' }, { key: 'dbSchemaVersion', value: '2' },
     { key: 'libraryId', value: core.settings.find(row => row.key === 'libraryId')!.value }, { key: 'exportedAt', value: new Date().toISOString() },
     { key: 'instructions', value: 'שורה 1 היא כותרת; אין לשנות IDs וקשרים ללא התאמה בכל הגיליונות. ריק משמעו null. תאריכים הם ISO; מחיר ביחידות קטנות. אין נוסחאות.' },
     { key: 'images', value: 'ImageRefs הם הפניות בלבד, ללא קובצי תמונה. JSON הוא הגיבוי המלא. טיוטות צילום מדף אינן נכללות.' },
   ];
   for (const [name, schema] of Object.entries(workbookSchema)) for (const [column, type] of Object.entries(schema.columns)) manifest.push({ sheet: name, column, type,
     value: column === 'purchasePriceMinor' ? 'מחיר ביחידות קטנות של המטבע: 100 = יחידה אחת' : column === 'position' ? 'מיקום בקשר, החל מ־0 ברצף' : /At$/.test(column) ? 'תאריך ISO בטקסט; ריק רק כשמותר לפי השדה' : type === 'json' ? 'JSON מובנה לפי הסכמה; ללא תוצאות ספק גולמיות' : type === 'text' ? 'תא טקסט, מזהים ואפסים נשמרים כפי שהם' : type === 'boolean' ? 'TRUE/FALSE מסוג בוליאני' : 'מספר לפי טווח השדה',
-    editable: !/^(id|.*Id|key|revision|normalizedName|titleSortKey|createdAt|updatedAt|sha256)$/.test(column) ? 'yes' : 'no' });
+    editable: !bookDisplayColumns.includes(column) && !/^(id|.*Id|key|revision|normalizedName|titleSortKey|createdAt|updatedAt|sha256)$/.test(column) ? 'yes' : 'no' });
   addSheet(workbook, 'Manifest', manifestColumns, manifest);
   for (const [name, schema] of Object.entries(workbookSchema)) {
     let rows: Row[];
@@ -52,10 +52,17 @@ export function fullWorkbook(core: Core): XLSX.WorkBook {
       const key = name === 'BookAuthors' ? 'authorIds' : name === 'BookGenres' ? 'genreIds' : 'tagIds';
       const ref = name === 'BookAuthors' ? 'authorId' : name === 'BookGenres' ? 'genreId' : 'tagId';
       rows = core.books.flatMap(book => book[key].map((id, position) => ({ bookId: book.id, [ref]: id, position })));
+    } else if (name === 'Books') {
+      const names = (ids: string[], rows: { id: string; name?: string; displayName?: string }[]) => ids.map(id => rows.find(row => row.id === id)?.displayName ?? rows.find(row => row.id === id)?.name).filter(Boolean).join('; ').slice(0,1000);
+      rows = core.books.map(book => {
+        const copy = core.copies.filter(row => row.bookId === book.id && !row.archivedAt).sort((a,b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))[0];
+        return { ...book, hasRating: Object.hasOwn(book, 'rating'), authorNames: names(book.authorIds,core.authors), shelfNames: names(core.bookShelves.filter(row => row.bookId === book.id).map(row => row.shelfId),core.shelves), genreNames: names(book.genreIds,core.genres), tagNames: names(book.tagIds,core.tags), seriesName: core.series.find(row => row.id === book.seriesId)?.name ?? null, priceILS: copy?.currency === 'ILS' && copy.purchasePriceMinor !== null ? copy.purchasePriceMinor / 100 : null };
+      });
     } else if (name === 'ImageRefs') rows = core.images.map(image => ({ id: image.id, sha256: image.sha256, sourceUrl: image.sourceUrl }));
     else rows = core[schema.table as keyof Core] as unknown as Row[];
     addSheet(workbook, name, Object.keys(schema.columns), rows, schema.columns);
   }
+  workbook.SheetNames = ['Books', ...workbook.SheetNames.filter(name => name !== 'Books')];
   return workbook;
 }
 export function simpleWorkbook(): XLSX.WorkBook {
@@ -77,7 +84,12 @@ export function writeWorkbook(workbook: XLSX.WorkBook): Uint8Array<ArrayBuffer> 
   if (bytes.length > XLSX_LIMITS.file) return workbookError('Workbook', 0, 'file', 'היצוא גדול מ־10MiB; השתמש בגיבוי JSON');
   return bytes;
 }
-export function downloadWorkbook(bytes: Uint8Array<ArrayBuffer>, prefix: string) {
+export async function downloadWorkbook(bytes: Uint8Array<ArrayBuffer>, prefix: string) {
+  const bridge = (window as Window & { AndroidBridge?: { saveExcelFile?: (base64: string, filename: string) => void | Promise<void> } }).AndroidBridge;
+  if (typeof bridge?.saveExcelFile === 'function') {
+    let binary = ''; for (let offset = 0; offset < bytes.length; offset += 8192) binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
+    await bridge.saveExcelFile(btoa(binary), `${prefix}.xlsx`); return;
+  }
   const url = URL.createObjectURL(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
   const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${prefix}.xlsx`; anchor.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -142,9 +154,10 @@ export async function fullWorkbookCandidate(database: LibraryDatabase, input: Re
   if (!input.full) return workbookError('Manifest', 0, 'format', 'זה אינו template מלא');
   const manifest = sheetRows(input.workbook, 'Manifest', Object.fromEntries(manifestColumns.map(key => [key, 'text'])));
   const values = new Map(manifest.filter(row => row.key !== null).map(row => [row.key, row.value]));
-  if (values.get('format') !== 'my-library-xlsx' || values.get('templateVersion') !== '1' || values.get('dbSchemaVersion') !== '2') return workbookError('Manifest', 0, 'templateVersion', 'גרסת template אינה נתמכת');
-  const tables = Object.fromEntries(Object.entries(workbookSchema).map(([name, schema]) => [schema.table, sheetRows(input.workbook, name, schema.columns)])) as Record<string, Row[]>;
-  for (const [name, schema] of Object.entries(workbookSchema)) for (const [index, row] of tables[schema.table].entries()) for (const [key, value] of Object.entries(row)) {
+  if (values.get('format') !== 'my-library-xlsx' || !['1','2'].includes(String(values.get('templateVersion'))) || values.get('dbSchemaVersion') !== '2') return workbookError('Manifest', 0, 'templateVersion', 'גרסת template אינה נתמכת');
+  const activeSchema = values.get('templateVersion') === '1' ? legacyWorkbookSchema : workbookSchema;
+  const tables = Object.fromEntries(Object.entries(activeSchema).map(([name, schema]) => [schema.table, sheetRows(input.workbook, name, schema.columns)])) as Record<string, Row[]>;
+  for (const [name, schema] of Object.entries(activeSchema)) for (const [index, row] of tables[schema.table].entries()) for (const [key, value] of Object.entries(row)) {
     if (value !== null && /At$/.test(key) && (typeof value !== 'string' || !/^\d{4}-\d\d-\d\dT/.test(value) || !Number.isFinite(Date.parse(value)))) return workbookError(name, workbookRow(row, index), key, 'תאריך ISO אינו תקין');
     if (value !== null && typeof value === 'string' && schema.columns[key] === 'text' && value.length > (['notes','personalNotes'].includes(key) ? 20000 : 1000)) return workbookError(name, workbookRow(row, index), key, 'טקסט ארוך מדי');
     if (name === 'Books' && value !== null && ['isbn10','isbn13'].includes(key)) { try { if (parseISBN(String(value))[key as 'isbn10' | 'isbn13'] !== value) throw new Error(); } catch { return workbookError(name, workbookRow(row, index), key, 'ISBN אינו תקין'); } }
@@ -152,8 +165,12 @@ export async function fullWorkbookCandidate(database: LibraryDatabase, input: Re
     if (name === 'ImageRefs' && key === 'sha256' && (typeof value !== 'string' || !/^[a-f\d]{64}$/i.test(value))) return workbookError(name, workbookRow(row, index), key, 'hash אינו תקין');
     if (name === 'ImageRefs' && key === 'sourceUrl' && !safeSourceUrl(value)) return workbookError(name, workbookRow(row, index), key, 'כתובת מקור אינה מותרת');
   }
+  for (const book of tables.books) {
+    if (values.get('templateVersion') === '2' && book.hasRating !== true && book.rating === null) delete book.rating;
+    for (const key of bookDisplayColumns) delete book[key];
+  }
   const uuid = /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i;
-  for (const [name, schema] of Object.entries(workbookSchema)) if (Object.hasOwn(schema.columns, 'id')) {
+  for (const [name, schema] of Object.entries(activeSchema)) if (Object.hasOwn(schema.columns, 'id')) {
     const ids = new Set<unknown>();
     tables[schema.table].forEach((row, index) => { if (typeof row.id !== 'string' || !uuid.test(row.id) || ids.has(row.id)) return workbookError(name, workbookRow(row, index), 'id', 'מזהה חסר, לא תקין או כפול'); ids.add(row.id); });
   }

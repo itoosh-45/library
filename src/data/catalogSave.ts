@@ -4,7 +4,7 @@ import { saveBook, type BookInput } from './books';
 import { validateCandidate, validateMetadataSource, metadataFields, type Candidate, type FieldValues } from './metadata';
 import { LibraryValidationError } from './library';
 import { emptyInput } from './books';
-import { recognitionInput, recognitionMetadataFields, recognitionValues, recognitionVersion, validateRecognition, type RecognizedBook, type RecognitionField } from './recognition';
+import { recognitionModels, recognitionInput, recognitionMetadataFields, recognitionValues, recognitionVersion, validateRecognition, type RecognizedBook, type RecognitionField } from './recognition';
 
 export function inputFieldValue(input: BookInput, field: MetadataField): FieldValues[MetadataField] {
   if (field === 'authors') return input.authors.map(name => name.trim()).filter(Boolean);
@@ -36,7 +36,7 @@ export async function saveBookSelections(database: LibraryDatabase, input: BookI
     const item = validateRecognition({ items: [selection.item] }).items[0]; recognitionInput(emptyInput, item, selection.selected);
     const fields = recognitionValues(item), selected = recognitionMetadataFields(item, selection.selected);
     if (selected.some(field => used.has(field) || (field.startsWith('isbn') && [...used].some(other => other.startsWith('isbn'))))) throw new LibraryValidationError('בחר מקור אחד לכל שדה.'); selected.forEach(field => used.add(field));
-    const source: MetadataSource = { id: crypto.randomUUID(), bookId: 'pending', provider: 'gemini', recordId: `${selection.model}/${recognitionVersion}/${selection.imageHash}`, sourceUrl: null, fetchedAt: selection.fetchedAt, fieldValues: fields, selectedFields: selected, userOverriddenFields: selected.filter(field => JSON.stringify(inputFieldValue(input, field)) !== JSON.stringify(fields[field])), recognition: { version: recognitionVersion, model: selection.model, imageHash: selection.imageHash, item } };
+    const source: MetadataSource = { id: crypto.randomUUID(), bookId: 'pending', provider: selection.model === recognitionModels.groq ? 'groq' : selection.model === recognitionModels.ocr ? 'ocr' : 'gemini', recordId: `${selection.model}/${recognitionVersion}/${selection.imageHash}`, sourceUrl: null, fetchedAt: selection.fetchedAt, fieldValues: fields, selectedFields: selected, userOverriddenFields: selected.filter(field => JSON.stringify(inputFieldValue(input, field)) !== JSON.stringify(fields[field])), recognition: { version: recognitionVersion, model: selection.model, imageHash: selection.imageHash, item } };
     validateMetadataSource(source); return source;
   });
   return database.transaction('rw', database.tables, async () => {

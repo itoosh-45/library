@@ -5,7 +5,7 @@ const columns = (text: string, number = '', boolean = '', json = ''): Record<str
   ...boolean.split(' ').filter(Boolean).map(key => [key, 'boolean']), ...json.split(' ').filter(Boolean).map(key => [key, 'json']),
 ]);
 export const workbookSchema: Record<string, SheetSchema> = {
-  Books: { table: 'books', columns: columns('id title subtitle isbn10 isbn13 danacode publisher edition volume language seriesId readStatus personalNotes primaryImageId createdAt updatedAt titleSortKey', 'publicationYear pages seriesNumber revision') },
+  Books: { table: 'books', columns: columns('id title subtitle isbn10 isbn13 danacode publisher edition volume language seriesId readStatus personalNotes primaryImageId createdAt updatedAt titleSortKey authorNames shelfNames genreNames tagNames seriesName', 'publicationYear pages seriesNumber revision rating priceILS', 'hasRating') },
   Copies: { table: 'copies', columns: columns('id bookId label currency notes archivedAt createdAt updatedAt', 'purchasePriceMinor') },
   Authors: { table: 'authors', columns: columns('id displayName givenName familyName normalizedName') },
   BookAuthors: { table: 'bookAuthors', columns: columns('bookId authorId', 'position') },
@@ -22,6 +22,8 @@ export const workbookSchema: Record<string, SheetSchema> = {
   Settings: { table: 'settings', columns: columns('key value') },
   ImageRefs: { table: 'imageRefs', columns: columns('id sha256 sourceUrl') },
 };
+export const bookDisplayColumns = ['authorNames', 'shelfNames', 'genreNames', 'tagNames', 'seriesName', 'priceILS', 'hasRating'];
+export const legacyWorkbookSchema = { ...workbookSchema, Books: { ...workbookSchema.Books, columns: Object.fromEntries(Object.entries(workbookSchema.Books.columns).filter(([key]) => !bookDisplayColumns.includes(key) && key !== 'rating')) } };
 export const manifestColumns = ['key', 'value', 'sheet', 'column', 'type', 'editable'];
 export const simpleFields = ['title', 'subtitle', 'authors', 'isbn', 'danacode', 'publisher', 'publicationYear', 'edition', 'volume', 'language', 'pages', 'personalNotes', 'readStatus', 'copies', 'purchasePrice', 'currency', 'copyNotes', 'createdAt'] as const;
 export type SimpleField = typeof simpleFields[number];

@@ -102,7 +102,12 @@ it('multiple genres/tags, normalized duplicate prevention, renaming and deleting
   expect(updated.genreIds).toEqual([genre.id]); expect(await database.bookShelves.count()).toBe(3);
   const renamed = await saveNamedItem(database, 'tags', 'שם חדש', tag);
   await expect(deleteNamedItem(database, 'tags', tag)).rejects.toThrow('השתנה');
-  await deleteNamedItem(database, 'tags', renamed); await deleteNamedItem(database, 'series', series); await deleteNamedItem(database, 'genres', genre);
+  await deleteNamedItem(database, 'tags', renamed); await deleteNamedItem(database, 'series', series);
+  const current = (await database.books.get(book.id))!;
+  await expect(deleteNamedItem(database, 'genres', genre)).rejects.toThrow('משויך');
+  expect((await database.books.get(book.id))?.genreIds).toEqual([genre.id]);
+  await saveBook(database, { ...emptyInput, genreIds: [] }, current);
+  await deleteNamedItem(database, 'genres', genre);
   expect(await database.books.get(book.id)).toMatchObject({ seriesId: null, seriesNumber: null, genreIds: [], tagIds: [extra.id], revision: 5 });
   expect(await database.copies.count()).toBe(1);
   await expect(saveBook(database, emptyInput, updated)).rejects.toThrow('השתנה');

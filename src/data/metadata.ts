@@ -45,7 +45,7 @@ export function validateCandidate(value: unknown): Candidate {
   return row as unknown as Candidate;
 }
 export function validateMetadataSource(value: unknown): MetadataSource {
-  const row = record(value), vision = row.provider === 'gemini', keys = ['id', 'bookId', 'provider', 'recordId', 'sourceUrl', 'fetchedAt', 'fieldValues', 'selectedFields', 'userOverriddenFields', ...(vision ? ['recognition'] : [])];
+  const row = record(value), vision = ['gemini','groq','ocr'].includes(String(row.provider)), keys = ['id', 'bookId', 'provider', 'recordId', 'sourceUrl', 'fetchedAt', 'fieldValues', 'selectedFields', 'userOverriddenFields', ...(vision ? ['recognition'] : [])];
   if (Object.keys(row).length !== keys.length || Object.keys(row).some(key => !keys.includes(key)) || (!vision && !isProvider(row.provider)) || typeof row.recordId !== 'string' || !row.recordId || row.recordId.length > 300 || !safeSourceUrl(row.sourceUrl) || !utcDate(row.fetchedAt)) return fail();
   const fields = validateFieldValues(row.fieldValues);
   if (vision) {
@@ -53,6 +53,7 @@ export function validateMetadataSource(value: unknown): MetadataSource {
     const batch = evidence.version === shelfRecognitionVersion, evidenceKeys = ['version', 'model', 'imageHash', 'item', ...(batch ? ['batchId', 'itemId'] : [])];
     const uuid = (value: unknown) => typeof value === 'string' && /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(value);
     if (Object.keys(evidence).length !== evidenceKeys.length || Object.keys(evidence).some(key => !evidenceKeys.includes(key)) || (!batch && evidence.version !== recognitionVersion) || (batch && (!uuid(evidence.batchId) || !uuid(evidence.itemId))) || !Object.values(recognitionModels).includes(evidence.model as never) || typeof evidence.imageHash !== 'string' || !/^[a-f0-9]{64}$/.test(evidence.imageHash) || row.sourceUrl !== null || row.recordId !== `${evidence.model}/${evidence.version}/${evidence.imageHash}${batch ? '/' + evidence.itemId : ''}`) return fail();
+    if (row.provider !== (evidence.model === recognitionModels.groq ? 'groq' : evidence.model === recognitionModels.ocr ? 'ocr' : 'gemini')) return fail();
     const item = validateRecognition({ items: [evidence.item] }).items[0], expected = recognitionValues(item);
     if (Object.keys(expected).length !== Object.keys(fields).length || metadataFields.some(field => JSON.stringify(expected[field]) !== JSON.stringify(fields[field]))) return fail();
   } else if (!matchesProvider(row.provider as Provider, row.sourceUrl)) return fail();

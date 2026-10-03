@@ -4,7 +4,7 @@ import type { BookInput } from './books';
 
 export const recognitionVersion = 'single-book-v1';
 export const shelfRecognitionVersion = 'shelf-v1';
-export const recognitionModels = { primary: 'gemini-3.8-flash', backup: 'gemini-3.7-flash' } as const;
+export const recognitionModels = { primary: 'gemini-3.8-flash', backup: 'gemini-3.7-flash', groq: 'qwen/qwen3.8-27b', ocr: 'tesseract-layout-v1' } as const;
 export const recognitionFields = ['title', 'authors', 'isbn', 'danacode', 'publisher'] as const;
 export type RecognitionField = typeof recognitionFields[number];
 export interface RecognizedBook {

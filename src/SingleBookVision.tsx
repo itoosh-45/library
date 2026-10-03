@@ -12,6 +12,7 @@ import { errorMessage } from './data/errors';
 const labels: Record<RecognitionField, string> = { title: 'שם הספר', authors: 'מחברים', isbn: 'ISBN', danacode: 'דאנאקוד', publisher: 'הוצאה לאור' };
 export default function SingleBookVision({ onClose, onApply, simple = false }: { simple?: boolean; onClose: () => void; onApply: (selection: RecognitionSelection) => void }) {
   const online = useOnline();
+  const [method,setMethod]=useState<'auto'|'local'>(personalVisionSession.hasKey?'auto':'local');
   const sourceRef = useRef<VisionImageSource | undefined>(undefined), sequence = useRef(0);
   const previewRef = useRef<HTMLImageElement>(null);
   const [source, setSource] = useState<VisionImageSource>(), [prepared, setPrepared] = useState<PreparedVisionImage>();
@@ -29,7 +30,7 @@ export default function SingleBookVision({ onClose, onApply, simple = false }: {
       sourceRef.current = loaded; setSource(loaded);
       const image = await prepareVisionImage(loaded); if (request !== sequence.current) return;
       setPrepared(image);
-      if (personalVisionSession.ready && navigator.onLine) await recognize(image);
+      if (method==='local' || personalVisionSession.hasKey) await recognize(image);
       else setMessage('התמונה המלאה מוכנה לשליחה, ללא צורך בחיתוך. חבר מפתח אישי כדי לזהות.');
     }
     catch (error) { if (request === sequence.current) setMessage(errorMessage(error)); }
@@ -42,10 +43,10 @@ export default function SingleBookVision({ onClose, onApply, simple = false }: {
     finally { if (request === sequence.current) setWorking(false); }
   }
   async function recognize(image = prepared) {
-    if (!image || !navigator.onLine) return; cancel(); const request = sequence.current; setWorking(true); setRunning(true); setOutcome(undefined); setSelected([]); setMessage('מזהה את הספר… אפשר לבטל.');
+    if (!image) return; cancel(); const request = sequence.current; setWorking(true); setRunning(true); setOutcome(undefined); setSelected([]); setMessage('מזהה את הספר… אפשר לבטל.');
     try {
       const hash = await hashBytes(await image.blob.arrayBuffer()); if (request !== sequence.current) return;
-      const value = await personalVisionSession.recognize(image.blob, () => { if (request === sequence.current) setMessage('המודל הראשי אינו זמין; מנסה פעם אחת את Gemini 3.7 Flash שאושר.'); });
+      const value = await personalVisionSession.recognize(image.blob, reason => { if (request === sequence.current) setMessage(reason ?? 'מנסה זיהוי חלופי…'); }, 'single', method==='local');
       if (request !== sequence.current) return; setOutcome(value); setImageHash(hash); setFetchedAt(new Date().toISOString()); setMessage(value.result.items.length ? 'בדוק את הפרטים לפני שמירת הספר.' : 'לא זוהה ספר קריא. נסה צילום קרוב יותר או הוסף ידנית.');
     } catch (error) { if (request === sequence.current) { setReady(personalVisionSession.ready); setMessage(errorMessage(error)); } }
     finally { if (request === sequence.current) { setWorking(false); setRunning(false); } }
@@ -54,13 +55,14 @@ export default function SingleBookVision({ onClose, onApply, simple = false }: {
   const available = item ? recognitionFields.filter(field => field === 'authors' ? item.authors.length : item[field]) : [];
   const appliedFields = simple ? available : selected;
   return <Sheet title="זיהוי ספר מתמונה" onClose={() => { cancel(); onClose(); }}>
-    {!online && <p role="status">זיהוי דורש רשת. בחירה וחיתוך תמונה זמינים במכשיר.</p>}<p className="hint">בחר או צלם תמונה. כשהמפתח האישי והסכמת השליחה מוגדרים, התמונה המלאה תישלח אוטומטית לזיהוי. אין צורך בחיתוך ואין שמירה אוטומטית של ספר.</p>
-    {(!simple || !ready) && <details open={!ready || undefined}><summary>מפתח אישי ותנאי שליחה</summary><VisionKey onChange={value => { cancel(); setReady(value); setOutcome(undefined); setSelected([]); }} /></details>}
+    {!online && <p role="status">אין רשת. OCR מקומי זמין במכשיר.</p>}<p className="hint">בחר או צלם תמונה. כשהמפתח האישי והסכמת השליחה מוגדרים, התמונה המלאה תישלח אוטומטית לזיהוי. אין צורך בחיתוך ואין שמירה אוטומטית של ספר.</p>
+    <label className="field">דרך הזיהוי<select aria-label="דרך הזיהוי" value={method} disabled={working} onChange={event=>{invalidate();setMethod(event.target.value as 'auto'|'local');}}><option value="auto">Gemini · Groq · OCR כגיבוי</option><option value="local">OCR מקומי · ללא API</option></select></label>
+    {method==='auto' && (!simple || !ready) && <details open={!ready || undefined}><summary>מפתח אישי ותנאי שליחה</summary><VisionKey onChange={value => { cancel(); setReady(value); setOutcome(undefined); setSelected([]); }} /></details>}
     <div className="field-grid"><label className="field">בחירת תמונת ספר<input type="file" accept="image/*" disabled={working} onChange={event => { void choose(event.target.files?.[0]); event.target.value = ''; }} /></label><label className="field">צילום ספר במצלמה<input type="file" accept="image/*" capture="environment" disabled={working} onChange={event => { void choose(event.target.files?.[0]); event.target.value = ''; }} /></label></div>
     {source && !simple && <section><div className="vision-image"><img src={source.url} width={source.width} height={source.height} alt="תמונת הספר לפני חיתוך" /><div className="vision-crop" style={{ left: `${crop[0] * 100}%`, top: `${crop[1] * 100}%`, right: `${(1 - crop[2]) * 100}%`, bottom: `${(1 - crop[3]) * 100}%` }} aria-hidden="true" /></div>
       <fieldset disabled={working}><legend>אזור הזיהוי בתמונה</legend><p className="hint">גבולות באחוזים לפי התמונה המקורית. המסגרת מציגה את האזור שיישלח.</p><div className="field-grid">{['גבול שמאל', 'גבול עליון', 'גבול ימין', 'גבול תחתון'].map((label, i) => <label className="field" key={label}>{label}<input type="number" min={0} max={100} step={1} value={Math.round(crop[i] * 100)} onChange={event => { invalidate(); setCrop(old => old.map((n, index) => index === i ? +event.target.value / 100 : n) as ImageCrop); }} /></label>)}</div><label className="field">סיבוב התמונה<select value={rotation} onChange={event => { invalidate(); setRotation(+event.target.value as typeof rotation); }}><option value={0}>ללא סיבוב</option><option value={90}>90°</option><option value={180}>180°</option><option value={270}>270°</option></select></label><button type="button" onClick={() => void prepare()}>הכנת התמונה לזיהוי</button></fieldset>
     </section>}
-    {prepared && <section className="notice"><h3>התמונה שתישלח</h3><img ref={previewRef} width={prepared.width} height={prepared.height} className="vision-prepared" alt="תמונה מוכנה לשליחה לזיהוי" /><p className="hint">{prepared.width}×{prepared.height} · JPEG · {Math.ceil(prepared.blob.size / 1024)}KB</p><button type="button" disabled={!ready || working || !online} onClick={() => void recognize()}>שליחת התמונה לזיהוי</button></section>}
+    {prepared && <section className="notice"><h3>התמונה לזיהוי</h3><img ref={previewRef} width={prepared.width} height={prepared.height} className="vision-prepared" alt="תמונה מוכנה לשליחה לזיהוי" /><p className="hint">{prepared.width}×{prepared.height} · JPEG · {Math.ceil(prepared.blob.size / 1024)}KB</p><button type="button" disabled={working || method==='auto'&&!personalVisionSession.hasKey} onClick={() => void recognize()}>זיהוי התמונה</button></section>}
     {working && <button type="button" className="secondary" onClick={() => { cancel(); setMessage(running ? 'הזיהוי בוטל. אין ניסיון חוזר אוטומטי.' : 'ההכנה בוטלה.'); }}>ביטול הפעולה</button>}
     <p role="status" aria-live="polite" className="form-status">{message}</p>
     {item && <section className="notice"><h3>{simple ? 'פרטי הספר שזוהה' : 'בחירת שדות מהתמונה'}</h3>{!simple && <p className="hint">{outcome?.model}{outcome?.usedBackup ? ' · מודל גיבוי' : ''} · כל השדות מתחילים ללא בחירה.</p>}{item.uncertaintyReasons.map((reason, i) => <p className="hint" key={i}>{reason}</p>)}{available.map(field => simple ? <p key={field}>{labels[field]}: {field === 'authors' ? item.authors.join(' · ') : item[field]}</p> : <label className="catalog-choice" key={field}><input type="checkbox" checked={selected.includes(field)} onChange={event => setSelected(old => event.target.checked ? [...old, field] : old.filter(value => value !== field))} /><span>{labels[field]}: {field === 'authors' ? item.authors.join(' · ') : item[field]}<small>ראיה: {item.evidenceByField[field].join(' · ')}</small></span></label>)}<details><summary>הטקסט שנקרא בתמונה</summary><p className="visible-text">{item.visibleText}</p></details><button type="button" disabled={!appliedFields.length} onClick={() => { cancel(); onApply({ item, selected: appliedFields, model: outcome!.model, imageHash, fetchedAt }); }}>{simple ? 'שימוש בפרטי הספר' : 'החלת השדות מהתמונה על הטיוטה'}</button></section>}

@@ -6,7 +6,7 @@ import { db } from './data/database';
 import { CatalogSearch, emptyQuery, openLibraryAdapter, unavailableAdapter, type CatalogQuery, type ProviderResult } from './data/catalog';
 import { providerNames, type Candidate } from './data/metadata';
 import { applyCatalogCandidate } from './data/catalogSave';
-import { downloadCatalogCover } from './data/catalogCover';
+import { downloadCatalogCover, downloadBookCover } from './data/catalogCover';
 import type { MetadataField, StoredImage } from './data/models';
 import type { BookInput } from './data/books';
 import { errorMessage } from './data/errors';
@@ -57,9 +57,9 @@ export function CatalogPanel({ input, disabled, onApply, autoOpen = false, autoS
       if (controller.signal.aborted) return;
       const { draft, fields } = applyCatalogCandidate(input, resolved);
       let cover: StoredImage | undefined, message = 'כל הפרטים הזמינים הועברו לטיוטה. אפשר לערוך לפני שמירת הספר.';
-      if (fetchCover && resolved.coverUrl) {
+      if (fetchCover && (resolved.coverUrl || draft.isbn)) {
         const coverSignal = AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]);
-        try { cover = await downloadCatalogCover(resolved.coverUrl, coverSignal); message += ' הכריכה נטענה.'; }
+        try { cover = await downloadBookCover(resolved.coverUrl, draft.isbn, coverSignal); message += ' הכריכה נטענה.'; }
         catch { if (controller.signal.aborted) return; message += ' הכריכה לא נטענה; אפשר להעלות תמונה ידנית.'; }
       } else if (fetchCover) message += ' לא נמצאה כריכה בתוצאה.';
       if (controller.signal.aborted || resolveRequest.current !== controller) return;
@@ -82,5 +82,5 @@ export function CatalogPanel({ input, disabled, onApply, autoOpen = false, autoS
 }
 export function Provenance({ bookId }: { bookId: string }) {
   const sources = useLiveQuery(() => db.metadataSources.where('bookId').equals(bookId).toArray(), [bookId]);
-  return sources?.length ? <details><summary>מקורות המידע ({sources.length})</summary>{sources.map(source => <section key={source.id}><h3>{source.provider === 'gemini' ? 'זיהוי מתמונה · Gemini' : providerNames[source.provider as keyof typeof providerNames]}</h3><p>{source.selectedFields.map(field => fieldLabels[field]).join(' · ')}</p>{source.userOverriddenFields.length > 0 && <p>נערך ידנית: {source.userOverriddenFields.map(field => fieldLabels[field]).join(' · ')}</p>}{source.recognition && <details><summary>ראיות הזיהוי מהתמונה</summary><p className="hint">{source.recognition.model} · {source.recognition.version}</p><p className="visible-text">{source.recognition.item.visibleText}</p>{source.recognition.item.uncertaintyReasons.map((reason, i) => <p key={i}>{reason}</p>)}</details>}{source.sourceUrl && <a href={source.sourceUrl} target="_blank" rel="noopener noreferrer">רשומת המקור</a>}</section>)}</details> : null;
+  return sources?.length ? <details><summary>מקורות המידע ({sources.length})</summary>{sources.map(source => <section key={source.id}><h3>{source.provider === 'groq' ? 'זיהוי מתמונה · Groq' : source.provider === 'ocr' ? 'OCR מקומי' : source.provider === 'gemini' ? 'זיהוי מתמונה · Gemini' : providerNames[source.provider as keyof typeof providerNames]}</h3><p>{source.selectedFields.map(field => fieldLabels[field]).join(' · ')}</p>{source.userOverriddenFields.length > 0 && <p>נערך ידנית: {source.userOverriddenFields.map(field => fieldLabels[field]).join(' · ')}</p>}{source.recognition && <details><summary>ראיות הזיהוי מהתמונה</summary><p className="hint">{source.recognition.model} · {source.recognition.version}</p><p className="visible-text">{source.recognition.item.visibleText}</p>{source.recognition.item.uncertaintyReasons.map((reason, i) => <p key={i}>{reason}</p>)}</details>}{source.sourceUrl && <a href={source.sourceUrl} target="_blank" rel="noopener noreferrer">רשומת המקור</a>}</section>)}</details> : null;
 }

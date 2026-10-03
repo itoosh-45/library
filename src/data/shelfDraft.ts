@@ -99,7 +99,7 @@ export function overlapSuggestions(draft: RecognitionDraft): { firstId: string; 
 }
 export class ShelfQueue {
   #files = new Map<string, File>(); #active = false; #generation = 0; #disposed = false;
-  constructor(private database: LibraryDatabase, private session: VisionSession, private recognize?: (blob: Blob) => Promise<VisionOutcome>) {}
+  constructor(private database: LibraryDatabase, private session: Pick<VisionSession,'recognize'|'cancel'>, private recognize?: (blob: Blob) => Promise<VisionOutcome>) {}
   get active() { return this.#active; }
   activate() { this.#disposed = false; }
   hasFile(id: string) { return this.#files.has(id); }

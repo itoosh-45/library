@@ -52,7 +52,7 @@ export async function envelope(core: Core): Promise<Backup> {
   if (estimated > MAX_BACKUP_BYTES) return bad('הגיבוי גדול מדי (עד 150 מגה־בייט). אין שינוי בספרייה.');
   const { images, ...tables } = core;
   const data: Payload = { ...tables, images: await Promise.all(images.map(async ({ blob, ...image }) => ({ ...image, base64: encode(new Uint8Array(await blob.arrayBuffer())) }))) };
-  return { format: 'personal-library-basic', version: 7, schemaVersion: 2, appVersion: '0.20.0', libraryId: core.settings.find(setting => setting.key === 'libraryId')!.value, exportedAt: new Date().toISOString(), counts: countsOf(core), checksum: await hashBytes(new TextEncoder().encode(JSON.stringify(data)).buffer), data };
+  return { format: 'personal-library-basic', version: 7, schemaVersion: 2, appVersion: '0.21.0', libraryId: core.settings.find(setting => setting.key === 'libraryId')!.value, exportedAt: new Date().toISOString(), counts: countsOf(core), checksum: await hashBytes(new TextEncoder().encode(JSON.stringify(data)).buffer), data };
 }
 export async function createSnapshot(database: LibraryDatabase, full = false): Promise<Snapshot> {
   const core = await database.transaction('r', database.tables, () => readCore(database));

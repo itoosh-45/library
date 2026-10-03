@@ -53,12 +53,12 @@ export function CollectionsPanel({ list }: { list: BookListProps }) {
     {editor && <NamedEditor {...editor} onClose={() => setEditor(undefined)} />}
   </>;
 }
-function NamedEditor({ kind, item, onClose }: { kind: CollectionKind; item?: NamedItem; onClose: () => void }) {
+export function NamedEditor({ kind, item, onClose }: { kind: CollectionKind; item?: NamedItem; onClose: () => void }) {
   const [name, setName] = useState(item?.name ?? ''), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [confirmDelete, setConfirmDelete] = useState(false);
   return <Sheet title={item ? 'עריכת אוסף' : 'הוספת אוסף'} busy={busy} dirty={dirty} onClose={onClose}><form onSubmit={async event => { event.preventDefault(); setBusy(true); setError(''); try { await saveNamedItem(db, kind, name, item); onClose(); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); } }}><fieldset disabled={busy}>
     <label className="field">שם האוסף<input required maxLength={120} value={name} onChange={event => { setName(event.target.value); setDirty(true); }} /></label>
     {kind === 'genres' && !item && <label className="field">ז׳אנרים מוכנים<select value="" onChange={event => { setName(event.target.value); setDirty(true); }}><option value="">בחירת ז׳אנר מוכן</option>{presetGenres.map(name => <option key={name}>{name}</option>)}</select></label>}
     <button type="submit">שמירת האוסף</button><p className="error-message" role="alert">{error}</p>
-    {item && <details><summary>מחיקת האוסף</summary><p>הספרים יישארו. השיוך לאוסף יוסר{kind === 'series' ? ' וגם המספרים בסדרה יימחקו' : ''}.</p><label className="check"><input type="checkbox" checked={confirmDelete} onChange={event => setConfirmDelete(event.target.checked)} />אני מאשר הסרת האוסף והשיוכים אליו</label><button type="button" disabled={!confirmDelete} onClick={async () => { setBusy(true); setError(''); try { await deleteNamedItem(db, kind, item); onClose(); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); } }}>מחיקת האוסף בלבד</button></details>}
+    {item && <details><summary>מחיקת האוסף</summary><p>{kind === 'genres' ? 'ניתן למחוק רק ז׳אנר שאינו משויך לספר. הסר תחילה את השיוכים בספרים.' : 'הספרים יישארו. השיוך לאוסף יוסר'}{kind === 'series' ? ' וגם המספרים בסדרה יימחקו' : ''}.</p><label className="check"><input type="checkbox" checked={confirmDelete} onChange={event => setConfirmDelete(event.target.checked)} />אני מאשר הסרת האוסף והשיוכים אליו</label><button type="button" disabled={!confirmDelete} onClick={async () => { setBusy(true); setError(''); try { await deleteNamedItem(db, kind, item); onClose(); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); } }}>מחיקת האוסף בלבד</button></details>}
   </fieldset></form></Sheet>;
 }

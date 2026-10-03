@@ -1,3 +1,6 @@
+import { downloadBookCover } from './data/catalogCover';
+import { openLibraryAdapter } from './data/catalog';
+import { findRecognizedCandidate } from './data/recognizedCatalog';
 import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './data/database';
@@ -33,7 +36,7 @@ export function Thumbnail({ imageId, image, alt = 'כריכת הספר', defer =
   }, [defer, imageId]);
   if (!defer) return <LoadedThumbnail imageId={imageId} image={image} alt={alt} />;
   const load = near || !!image;
-  return <span ref={container} className={load ? 'thumbnail' : 'book-placeholder'} aria-hidden={load ? undefined : true}>{load ? <LoadedThumbnail imageId={imageId} image={image} alt={alt} /> : '▤'}</span>;
+  return <span ref={container} className={load ? 'thumbnail' : 'book-placeholder'} aria-hidden={load ? undefined : true}>{load ? <LoadedThumbnail imageId={imageId} image={image} alt={alt} /> : <span className="book-placeholder" aria-hidden="true" />}</span>;
 }
 function LoadedThumbnail({ imageId, image, alt }: { imageId?: string | null; image?: StoredImage | null; alt: string }) {
   const stored = useLiveQuery(() => imageId ? db.images.get(imageId) : undefined, [imageId]);
@@ -44,7 +47,7 @@ function LoadedThumbnail({ imageId, image, alt }: { imageId?: string | null; ima
     const value = URL.createObjectURL(blob); if (ref.current) ref.current.src = value;
     return () => URL.revokeObjectURL(value);
   }, [blob]);
-  return blob ? <img ref={ref} className="book-cover" alt={alt} /> : <span className="book-placeholder" aria-hidden="true">▤</span>;
+  return blob ? <img ref={ref} className="book-cover" alt={alt} /> : <span className="book-placeholder" aria-hidden="true" />;
 }
 function inputFromBook(book: Book | undefined, names: string[]): BookInput {
   if (!book) return { ...emptyInput, authors: [''], genreIds: [], tagIds: [], seriesId: null, seriesNumber: '' };
@@ -62,6 +65,9 @@ export function BookEditor({ book, authorNames, onClose, onOpen, startWith = 'ma
   const [recognitionSelections, setRecognitionSelections] = useState<RecognitionSelection[]>([]), [vision, setVision] = useState(startWith === 'vision');
   const [scanner, setScanner] = useState(startWith === 'barcode'), [barcodeRevision, setBarcodeRevision] = useState(0);
   const [catalogBusy, setCatalogBusy] = useState(false);
+  const coverRequest=useRef<AbortController|undefined>(undefined);
+  const [coverMessage,setCoverMessage]=useState('');
+  useEffect(()=>()=>coverRequest.current?.abort(),[]);
   const [barcodeSearch, setBarcodeSearch] = useState(false);
   const copies = useLiveQuery(() => book ? db.copies.where('bookId').equals(book.id).toArray() : [], [book?.id]) ?? [];
   function field(key: Exclude<keyof BookInput, 'authors' | 'readStatus' | 'shelfIds' | 'genreIds' | 'tagIds' | 'seriesId' | 'seriesNumber' | 'rating' | 'genreNames'>, label: string, numeric = false) {
@@ -80,6 +86,18 @@ export function BookEditor({ book, authorNames, onClose, onOpen, startWith = 'ma
     if (!file) return; setBusy(true); setError('');
     try { setImage(await prepareImage(file)); setDirty(true); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); }
   }
+  async function findCover(values=input) {
+    if(!navigator.onLine){setCoverMessage('משיכת כריכה דורשת חיבור לרשת.');return;}
+    coverRequest.current?.abort();const controller=new AbortController();coverRequest.current=controller;
+    const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(20000)]);setBusy(true);setCoverMessage('מחפש כריכה…');
+    try {
+      let cover:StoredImage|undefined;
+      if(values.isbn){try{cover=await downloadBookCover(undefined,values.isbn,signal);}catch{/* Search the catalog if an ISBN cover is absent. */}}
+      if(!cover){const candidate=await findRecognizedCandidate(values,openLibraryAdapter(),signal);cover=await downloadBookCover(candidate?.coverUrl,values.isbn,signal);}
+      if(!signal.aborted){setImage(cover);setDirty(true);setCoverMessage('הכריכה נטענה. לחץ על שמירת הספר כדי לשמור אותה.');}
+    }catch{if(!controller.signal.aborted)setCoverMessage('לא נמצאה כריכה זמינה. אפשר להעלות צילום כריכה.');}
+    finally{if(!controller.signal.aborted)setBusy(false);}
+  }
   async function protectDelete() {
     setBusy(true); setError(''); try { const snapshot = await createFullSnapshot(db); downloadSnapshot(snapshot, 'before-delete'); setSafety(snapshot); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); }
   }
@@ -87,7 +105,7 @@ export function BookEditor({ book, authorNames, onClose, onOpen, startWith = 'ma
     if (!book || !safety || !confirmed) return; setBusy(true); setError('');
     try { await deleteBook(db, book.id, safety.fingerprint); onClose(); } catch (error) { setSafety(undefined); setConfirmed(false); setError(errorMessage(error)); } finally { setBusy(false); }
   }
-  return <Sheet title={book ? 'עריכת ספר' : 'הוספת ספר'} onClose={onClose} busy={busy} dirty={dirty}><div className={simple ? 'simple-book-editor' : undefined}>
+  return <Sheet title={book ? 'עריכת ספר' : 'הוספת ספר'} onClose={onClose} busy={busy || catalogBusy} dirty={dirty}><div className={simple ? 'simple-book-editor' : undefined}>
     <StarRating value={input.rating ?? null} disabled={busy || catalogBusy} onChange={rating => { setInput({ ...input, rating }); setDirty(true); }} />
     {simple && !book && <button type="button" className="photo-add-entry" disabled={busy} onClick={() => setVision(true)}>הוספה מתמונה · ספרים או ברקודים</button>}
     {vision && simple && !book && <Suspense fallback={<p role="status">טוען…</p>}><ImageBooks onClose={() => setVision(false)} onSaved={onClose} /></Suspense>}
@@ -95,11 +113,11 @@ export function BookEditor({ book, authorNames, onClose, onOpen, startWith = 'ma
     <details className={simple ? 'simple-import' : undefined} open={!simple || barcodeSearch || undefined}><summary hidden={!simple}>מילוי אוטומטי מסריקה או תמונה</summary><button type="button" className="secondary" disabled={busy || !!dirtyCopyId} onClick={() => setScanner(true)}>סריקת ברקוד או הקלדת מזהה</button>
     {scanner && <Suspense fallback={<p role="status">טוען סורק…</p>}><BarcodeScanner onClose={() => setScanner(false)} onApply={(kind, value) => { setInput(old => ({ ...old, isbn: kind === 'isbn' ? value : '', danacode: kind === 'danacode' ? value : '' })); setBarcodeSearch(true); setDirty(true); setDuplicates([]); setBarcodeRevision(old => old + 1); setScanner(false); }} /></Suspense>}
     {(!simple || !!book) && <button type="button" className="secondary" disabled={busy || !!dirtyCopyId} onClick={() => setVision(true)}>זיהוי ספר מתמונה</button>}
-    {vision && (!simple || !!book) && <Suspense fallback={<p role="status">טוען זיהוי תמונה…</p>}><SingleBookVision simple={simple} onClose={() => setVision(false)} onApply={selection => { const fields = recognitionMetadataFields(selection.item, selection.selected); setInput(old => recognitionInput(old, selection.item, selection.selected)); setRecognitionSelections(old => [...old.map(item => remainingRecognition(item, fields)).filter(item => item.selected.length), selection]); setCatalogSelections(old => old.map(item => ({ ...item, selected: item.selected.filter(field => !overlapsSource(field, fields)) })).filter(item => item.selected.length)); setDirty(true); setDuplicates([]); setBarcodeRevision(old => old + 1); setBarcodeSearch(false); setVision(false); }} /></Suspense>}
+    {vision && (!simple || !!book) && <Suspense fallback={<p role="status">טוען זיהוי תמונה…</p>}><SingleBookVision simple={simple} onClose={() => setVision(false)} onApply={selection => { const fields = recognitionMetadataFields(selection.item, selection.selected); const recognized=recognitionInput(input,selection.item,selection.selected);setInput(recognized);if(!image&&!book?.primaryImageId)void findCover(recognized); setRecognitionSelections(old => [...old.map(item => remainingRecognition(item, fields)).filter(item => item.selected.length), selection]); setCatalogSelections(old => old.map(item => ({ ...item, selected: item.selected.filter(field => !overlapsSource(field, fields)) })).filter(item => item.selected.length)); setDirty(true); setDuplicates([]); setBarcodeRevision(old => old + 1); setBarcodeSearch(false); setVision(false); }} /></Suspense>}
     <CatalogPanel simple={simple} key={barcodeRevision} autoOpen={barcodeRevision > 0 || startWith === 'catalog'} autoSearch={barcodeSearch} fetchCover onBusy={setCatalogBusy} input={input} disabled={busy || !!dirtyCopyId} onApply={(draft, candidate, selected, cover) => { setInput(draft); if (cover) setImage(cover); setDirty(true); setDuplicates([]); setRecognitionSelections(old => old.map(item => remainingRecognition(item, selected)).filter(item => item.selected.length)); setCatalogSelections(old => [...old.map(item => ({ ...item, selected: item.selected.filter(field => !overlapsSource(field, selected)) })).filter(item => item.selected.length), { candidate, selected }]); }} />
     </details>{book && !simple && <Provenance bookId={book.id} />}
     <form onSubmit={event => void save(event)}><fieldset disabled={busy || catalogBusy || !!dirtyCopyId}>{!simple && <p className="hint">כל השדות לבחירה. אפשר לשמור ספר גם ללא שם ולמלא בהמשך.</p>}
-      <div className="cover-editor"><Thumbnail imageId={image === undefined ? book?.primaryImageId : null} image={image} /><label className="field">תמונת כריכה<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" onChange={event => { void upload(event.target.files?.[0]); event.target.value = ''; }} /></label><button type="button" className="secondary" onClick={() => { setImage(null); setDirty(true); }}>הסרת תמונה</button></div>
+      <div className="cover-editor"><Thumbnail imageId={image === undefined ? book?.primaryImageId : null} image={image} /><label className="field">תמונת כריכה<input type="file" accept="image/*" onChange={event => { void upload(event.target.files?.[0]); event.target.value = ''; }} /></label><button type="button" className="secondary" disabled={!input.title&&!input.isbn} onClick={()=>void findCover()}>חיפוש כריכה</button><button type="button" className="secondary" onClick={() => { setImage(null); setDirty(true); }}>הסרת תמונה</button></div>{coverMessage&&<p role="status">{coverMessage}</p>}
       {field('title', 'שם הספר')}
       <label className="field">מחיר הספר בש״ח<input inputMode="decimal" value={input.price ?? (() => { const copy = copies.filter(row => !row.archivedAt).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))[0]; return copy?.purchasePriceMinor == null ? '' : (copy.purchasePriceMinor / 100).toString(); })()} onChange={event => { setInput({ ...input, price: event.target.value }); setDirty(true); }} /></label>
       <GenreField input={input} onChange={value => { setInput(value); setDirty(true); }} />

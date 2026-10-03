@@ -13,3 +13,4 @@ button,input,select,textarea{font:inherit}select{border:1px solid #71878c;border
 .shelf-queue{list-style:none;padding-inline-start:0}.shelf-queue>li+li{border-top:1px solid #d6e1e3;padding-top:1rem;margin-top:1rem}
 .thumbnail{display:inline-flex;align-items:center;justify-content:center;width:42px;height:60px;flex-shrink:0}
 .book-list li[hidden]{display:none}
+.excel-panel fieldset{display:grid;gap:12px}.excel-panel button{max-inline-size:100%}.excel-panel label,.excel-panel p{overflow-wrap:anywhere}.excel-panel table{display:block;max-inline-size:100%;overflow:auto}.excel-panel th,.excel-panel td{padding:6px;text-align:start}

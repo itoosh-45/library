@@ -28,6 +28,8 @@ test('production shell, manifest, all lazy assets and font survive offline; loca
   expect(shell.urls.some(url => url.includes('BarcodeScanner-'))).toBe(true);
   expect(shell.urls.some(url => url.includes('SingleBookVision-'))).toBe(true);
   expect(shell.urls.some(url => url.includes('ShelfBatch-'))).toBe(true);
+  expect(shell.urls.some(url => url.includes('ExcelPanel-'))).toBe(true);
+  expect(shell.urls).toContain('/library/templates/full-example.xlsx');
   expect(shell.manifest.icons.map((icon: { sizes: string }) => icon.sizes)).toEqual(['192x192', '512x512', '512x512']);
   await context.setOffline(true); await page.reload();
   await expect(page.getByRole('heading', { name: /כל הספרים/, level: 1 })).toBeVisible();
@@ -54,6 +56,14 @@ test('production shell, manifest, all lazy assets and font survive offline; loca
   await expect(page.locator('.book-loans')).toContainText('1 עותקים זמינים להשאלה');
   await page.keyboard.press('Escape'); await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
   await expect(page.getByText('קובצי האפליקציה מוכנים לפתיחה ללא רשת.')).toBeVisible();
+  await page.getByRole('button', { name: 'פתיחת כלי Excel', exact: true }).click();
+  const excelDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'יצוא הספרייה ל־Excel', exact: true }).click();
+  expect((await excelDownload).suggestedFilename()).toBe('library-tables.xlsx');
+  await page.getByLabel('בחירת Excel לייבוא').setInputFiles('public/templates/Books-template.xlsx');
+  await page.getByRole('button', { name: 'בדיקת המיפוי ותצוגה מקדימה', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'תצוגה מקדימה של Excel', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'ביטול ייבוא Excel', exact: true }).click();
   expect(await page.evaluate(async () => { await document.fonts.ready; return document.fonts.check('16px Heebo'); })).toBe(true);
   await page.setViewportSize({ width: 360, height: 800 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

@@ -3,16 +3,16 @@ import { randomUUID } from 'node:crypto';
 import { CatalogError, readCatalogJson, retryAfterMs, validateQuery, type CatalogAdapter, type CatalogQuery } from '../src/data/catalog';
 import { validateCandidate, type Candidate } from '../src/data/metadata';
 import { normalizeGoogleBooks } from '../src/data/catalogGateway';
+import type { CatalogQuotaStore, ServerProvider } from './quota';
 
-type ServerProvider = 'nli' | 'googlebooks';
 interface ProviderConfig { adapter: CatalogAdapter; dailyLimit: number }
-interface ServerOptions { providers?: Partial<Record<ServerProvider, ProviderConfig>>; origins?: string[]; timeoutMs?: number; now?: () => number }
+interface ServerOptions { providers?: Partial<Record<ServerProvider, ProviderConfig>>; origins?: string[]; timeoutMs?: number; now?: () => number; quotaStore?: CatalogQuotaStore }
 const safeFailure = { state: 'error', message: 'שירות הקטלוג אינו זמין כרגע.' };
 const localOrigins = ['http://127.0.0.1:4330', 'http://127.0.0.1:4331'];
 
 // Local service only. External hosting, authentication and infrastructure isolation remain separate gates.
-export function createCatalogServer({ providers = {}, origins = localOrigins, timeoutMs = 12000, now = Date.now }: ServerOptions = {}) {
-  const allowed = new Set(origins), counts = new Map<ServerProvider, { day: string; used: number; nextAt: number }>();
+export function createCatalogServer({ providers = {}, origins = localOrigins, timeoutMs = 12000, now = Date.now, quotaStore }: ServerOptions = {}) {
+  const allowed = new Set(origins);
   let windowStart = now(), windowCount = 0, active = 0;
   const server = createServer(async (req, res) => {
     res.setHeader('Cache-Control', 'no-store'); res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Referrer-Policy', 'no-referrer');
@@ -44,14 +44,13 @@ export function createCatalogServer({ providers = {}, origins = localOrigins, ti
     } catch { return send(400, { state: 'invalid-request' }); }
     const config = providers[provider];
     if (!config || config.adapter.provider !== provider || !Number.isInteger(config.dailyLimit) || config.dailyLimit < 1) return send(503, { state: 'unavailable', message: 'חיבור הקטלוג ממתין להגדרה מאומתת.' });
-    const day = new Date(now()).toISOString().slice(0, 10), counter = counts.get(provider) ?? { day, used: 0, nextAt: 0 };
-    if (counter.day !== day) { counter.day = day; counter.used = 0; }
-    if (counter.used >= config.dailyLimit || counter.nextAt > now()) {
-      const wait = counter.used >= config.dailyLimit ? Date.parse(day + 'T00:00:00.000Z') + 86400000 - now() : counter.nextAt - now();
-      res.setHeader('Retry-After', String(Math.max(1, Math.ceil(wait / 1000)))); return send(429, { state: 'rate-limited' });
-    }
     if (active >= 2) { res.setHeader('Retry-After', '5'); return send(429, { state: 'rate-limited' }); }
-    counter.used++; counter.nextAt = now() + 10000; counts.set(provider, counter); active++;
+    if (!quotaStore) return send(503, { state: 'unavailable', message: 'אחסון מכסת הקטלוג אינו זמין.' });
+    try {
+      const wait = quotaStore.reserve(provider, now(), config.dailyLimit);
+      if (wait > 0) { res.setHeader('Retry-After', String(Math.max(1, Math.ceil(wait / 1000)))); return send(429, { state: 'rate-limited' }); }
+    } catch { return send(503, { state: 'unavailable', message: 'אחסון מכסת הקטלוג אינו זמין.' }); }
+    active++;
     const controller = new AbortController(), timeout = setTimeout(() => controller.abort('timeout'), timeoutMs);
     const disconnect = () => { if (!res.writableEnded) controller.abort('disconnected'); }; res.on('close', disconnect);
     let abortHandler: (() => void) | undefined;
@@ -60,9 +59,14 @@ export function createCatalogServer({ providers = {}, origins = localOrigins, ti
       const candidates = await Promise.race([config.adapter.search(query, controller.signal), aborted]);
       if (!Array.isArray(candidates) || candidates.length > 20) throw new Error();
       const rows = candidates.map(validateCandidate); if (rows.some(row => row.provider !== provider)) throw new Error();
+      quotaStore.defer(provider, now() + 10000);
       send(200, { candidates: rows, requestId: randomUUID() });
     } catch (error) {
-      if (error instanceof CatalogError && error.state === 'rate-limited') { const wait = error.retryAfterMilliseconds; counter.nextAt = Math.max(counter.nextAt, now() + (wait && Number.isFinite(wait) ? Math.max(1000, wait) : 60000)); res.setHeader('Retry-After', String(Math.ceil((counter.nextAt - now()) / 1000))); send(429, { state: 'rate-limited' }); }
+      if (error instanceof CatalogError && error.state === 'rate-limited') {
+        const supplied = error.retryAfterMilliseconds, wait = supplied && Number.isSafeInteger(supplied) ? Math.max(10000, supplied) : 60000;
+        try { quotaStore.defer(provider, now() + wait); res.setHeader('Retry-After', String(Math.ceil(wait / 1000))); send(429, { state: 'rate-limited' }); }
+        catch { send(503, { state: 'unavailable', message: 'אחסון מכסת הקטלוג אינו זמין.' }); }
+      }
       else if (error instanceof CatalogError && error.state === 'timeout') send(504, { state: 'timeout', message: 'הקטלוג לא ענה בזמן.' });
       else if (error instanceof CatalogError && error.state === 'unavailable') send(503, { state: 'unavailable', message: 'החיבור לקטלוג אינו זמין כרגע.' });
       else send(502, safeFailure);

@@ -40,3 +40,5 @@ npm audit עבור production ו־dev דיווח אפס advisories בכל החו
 3. אימות NLI חי מלא, מפתח/מכסה Google Books, דיוק Gemini, iPhone/VoiceOver/Files/offline וכיבוי מכשיר נשארים NOT RUN. המשתמש השיב ״good״ לבדיקת 200%/Tab; נרשם שהבדיקה במחשב תקינה, בלי להסיק מכך VoiceOver או מכשיר אחר.
 
 מחזור 9 אינו PASS וגרסת release סופית אינה מאושרת בראיות. אפשר להמשיך להכנת candidate/staging בטוחה לפי שלב 19, תוך שמירת שערים אלה. ספר הפרויקט המקורי לא שונה.
+
+עדכון לאחר הדוח: [תיקון מכסות עמידות](gateway-quota-runbook.md) פתר את איפוס המונה המקומי על restart, עם 178 Vitest וארבע Node. הכשל הציבורי אינו מוסר כולו: authentication ו־infrastructure/Oracle עוד לא מאומתים. 21 hashes של frontend הושוו להעתק הקפוא ונשארו זהים; אין ריצת browser/PWA חוזרת בלי שינוי frontend.

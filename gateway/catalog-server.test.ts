@@ -1,11 +1,21 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Server } from 'node:http';
-import { createCatalogServer, googleBooksServerAdapter } from './catalog-server';
+import { createCatalogServer as catalogServer, googleBooksServerAdapter } from './catalog-server';
+import { SqliteCatalogQuota } from './quota';
+import { mkdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import type { Candidate } from '../src/data/metadata';
 import { CatalogError, emptyQuery } from '../src/data/catalog';
 
 const servers: Server[] = [];
-afterEach(async () => { vi.useRealTimers(); await Promise.all(servers.splice(0).map(server => new Promise<void>(resolve => { server.closeAllConnections(); server.close(() => resolve()); }))); });
+const stores: SqliteCatalogQuota[] = [];
+function createCatalogServer(options: NonNullable<Parameters<typeof catalogServer>[0]> = {}) {
+  const directory = resolve('private/phase18-quota-test'); mkdirSync(directory, { recursive: true });
+  const quotaStore = new SqliteCatalogQuota(resolve(directory, randomUUID() + '.sqlite')); stores.push(quotaStore);
+  return catalogServer({ ...options, quotaStore });
+}
+afterEach(async () => { vi.useRealTimers(); await Promise.all(servers.splice(0).map(server => new Promise<void>(resolve => { server.closeAllConnections(); server.close(() => resolve()); }))); for (const store of stores.splice(0)) store.close(); });
 async function start(server: Server) { servers.push(server); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const address = server.address(); if (!address || typeof address === 'string') throw new Error(); return `http://127.0.0.1:${address.port}`; }
 const headers = { Origin: 'http://127.0.0.1:4330', 'Content-Type': 'application/json' };
 const query = { ...emptyQuery, title: 'ספר בדיקה סינתטי' };
@@ -26,14 +36,16 @@ it('T24 local service rejects unknown origins, foreign query fields, arbitrary U
 it('T24 rejects a third active request without calling the provider and releases slots after completion', async () => {
   let now = Date.now(); const pending: Array<() => void> = [];
   const search = vi.fn(() => new Promise<Candidate[]>(resolve => pending.push(() => resolve([candidate]))));
-  const base = await start(createCatalogServer({ now: () => now, providers: { nli: { adapter: { provider: 'nli', search }, dailyLimit: 10 } } }));
+  const otherSearch = vi.fn(() => new Promise<Candidate[]>(resolve => pending.push(() => resolve([{ ...candidate, provider: 'googlebooks' }]))));
+  const base = await start(createCatalogServer({ now: () => now, providers: { nli: { adapter: { provider: 'nli', search }, dailyLimit: 10 }, googlebooks: { adapter: { provider: 'googlebooks', search: otherSearch }, dailyLimit: 10 } } }));
   const first = request(base); await vi.waitFor(() => expect(search).toHaveBeenCalledTimes(1));
   now += 10001;
-  const second = request(base); await vi.waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+  const second = request(base, { provider: 'googlebooks', query }); await vi.waitFor(() => expect(otherSearch).toHaveBeenCalledTimes(1));
   now += 10001;
-  expect((await request(base)).status).toBe(429); expect(search).toHaveBeenCalledTimes(2);
+  expect((await request(base)).status).toBe(429); expect(search).toHaveBeenCalledTimes(1);
   pending.shift()!(); pending.shift()!(); expect((await first).status).toBe(200); expect((await second).status).toBe(200);
-  const next = request(base); await vi.waitFor(() => expect(search).toHaveBeenCalledTimes(3));
+  now += 10001;
+  const next = request(base); await vi.waitFor(() => expect(search).toHaveBeenCalledTimes(2));
   pending.shift()!(); expect((await next).status).toBe(200);
 });
 it('T24 normalized results have explicit CORS, no cache and finite rate/day limits, even when the query changes', async () => {

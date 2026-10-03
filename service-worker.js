@@ -1,7 +1,7 @@
 /* global __ASSET_LIST__ */
 /* The build replaces these two constants. Only public build files enter this cache. */
-const build = '__BUILD_ID__';
-const assets = __ASSET_LIST__;
+const build = 'f07bb4b9d8bcda63c463';
+const assets = ["/library/assets/BarcodeScanner-16ZsrRU6.js","/library/assets/ExcelPanel-DVhaMfM4.js","/library/assets/ShelfBatch-BZtXYl0a.js","/library/assets/SingleBookVision-_x1lt4Tj.js","/library/assets/VisionKey-CragSLM3.js","/library/assets/esm-BGRWGqjG.js","/library/assets/esm-BmjxaYUB.js","/library/assets/index-CH9z1zIW.css","/library/assets/index-CNdb-2li.js","/library/assets/jsx-runtime-fL-pkE33.js","/library/assets/vision-BNWgQMLZ.js","/library/index.html","/library/fonts/Heebo-OFL.txt","/library/fonts/Heebo.ttf","/library/icons/book-192.png","/library/icons/book-512.png","/library/icons/book-maskable-512.png","/library/manifest.webmanifest","/library/templates/Books-template.xlsx","/library/templates/full-example.xlsx"];
 const scope = new URL(self.registration.scope).pathname;
 // Preserve the released default cache namespace; other paths must not share its cleanup prefix.
 const prefix = scope === '/library/' ? 'itoosh-library-shell-' : 'itoosh-library-path-shell-' + encodeURIComponent(scope) + '-';

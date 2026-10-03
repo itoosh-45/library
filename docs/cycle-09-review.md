@@ -7,7 +7,7 @@
 | migration, rollback וגרסה עתידית | phase17.test.ts, בדיקות versionchange/blocked, קוד stage16 אמיתי ונתיב /renamed/; ראיות ב־phase-17-progress.md |
 | שדרוג offline וגיבוי/שחזור | PWA update+schema1 ו־JSON 1–8, כל הטבלאות/Blobs/קשרים; כיבוי טלפון פיזי NOT RUN |
 | XSS, יעד רשת ופרטיות | CSP production, canary בכותרת/מחבר/הערות, backup/storage/cache/URL, Gemini מדומה; phase-18-progress.md |
-| gateway ותקציב | מקור/Host/body/timeout/rate/quota/concurrency מקומיים; authentication ציבורי ומכסה עמידה ל־restart חסרים ומונעים פרסום gateway |
+| gateway ותקציב | מקור/Host/body/timeout/rate/quota/concurrency מקומיים; תיקון SQLite ובדיקות תהליכים נפרדים משמרים מכסה/Retry-After אחרי restart באותו דיסק. authentication ציבורי ואימות infrastructure עדיין חסרים ומונעים פרסום gateway; ראו gateway-quota-runbook.md |
 | נגישות | RTL/keyboard/labels/ניגודיות מוצקה והגדלת טקסט סינתטית במחשב; VoiceOver/iPhone וסקירה מלאה NOT RUN |
 | סודות upstream | Google key header; NLI query key נדרש ומתועד, חיבור חי מלא NOT RUN |
 | תלויות | npm audit אפס advisories; כיסוי advisory של URL SheetJS מוגבל |

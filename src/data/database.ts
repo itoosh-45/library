@@ -4,7 +4,12 @@ import type { Author, Book, BookShelf, Copy, Loan, MetadataCache, MetadataSource
 
 // IndexedDB is scoped by origin. This name keeps other Pages apps separate.
 export const DATABASE_NAME = 'itoosh-45.library.personal.v1';
+export const DATABASE_SCHEMA_VERSION = 2;
+export function completeSeriesMigration(row: { collapsed?: boolean }) {
+  if (row.collapsed === undefined) row.collapsed = false;
+}
 export class LibraryDatabase extends Dexie {
+  upgradePending = false;
   books!: Table<Book, string>; copies!: Table<Copy, string>; authors!: Table<Author, string>;
   shelves!: Table<Shelf, string>; bookShelves!: Table<BookShelf, string>;
   series!: Table<Series, string>; genres!: Table<NamedItem, string>; tags!: Table<NamedItem, string>;
@@ -13,7 +18,8 @@ export class LibraryDatabase extends Dexie {
   metadataCache!: Table<MetadataCache, string>; recognitionDrafts!: Table<RecognitionDraft, string>;
   constructor(name = DATABASE_NAME) {
     super(name);
-    this.use({ stack: 'dbcore', name: 'update-write-guard', create: core => ({ ...core, transaction(stores, mode, options) {
+    this.use({ stack: 'dbcore', name: 'update-write-guard', create: core => ({ ...core, transaction: (stores, mode, options) => {
+      if (mode === 'readwrite' && this.upgradePending) throw new Error('שדרוג ממתין בחלון אחר. סגור את החיבור ופתח מחדש לפני שמירה.');
       const transaction = core.transaction(stores, mode, options);
       if (mode === 'readwrite') {
         const end = beginWrite();
@@ -33,12 +39,17 @@ export class LibraryDatabase extends Dexie {
       metadataCache: 'key,provider,expiresAt', recognitionDrafts: 'id,batchId,status,updatedAt',
     });
     this.version(2).stores({}).upgrade(async transaction => {
-      await transaction.table('series').toCollection().modify({ collapsed: false });
+      await transaction.table('series').toCollection().modify(completeSeriesMigration);
     });
   }
 }
 export async function initializeLibrary(database: LibraryDatabase): Promise<string> {
   await database.open();
+  // Dexie can reopen a newer native database after VersionError. Refuse it explicitly.
+  if (database.backendDB().version > DATABASE_SCHEMA_VERSION * 10) {
+    database.close();
+    throw new Dexie.VersionError('מסד הנתונים חדש יותר מגרסת האפליקציה.');
+  }
   return database.transaction('rw', database.settings, async () => {
     const existing = await database.settings.get('libraryId');
     if (existing) return existing.value;

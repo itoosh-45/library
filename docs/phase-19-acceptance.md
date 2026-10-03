@@ -1,5 +1,7 @@
 # שלב 19 — הכנת קבלה, עדיין ללא release candidate
 
+עדכון 3 באוקטובר: המשתמש אישר פרסום גם בלי השלמת כל הבדיקות. הבנייה פורסמה ב־Pages; פרטי הפרסום ו־smoke ב־docs/phase-20-release.md. התיעוד שלהלן מתאר את ההכנה והפערים, לא מעכב את הפרסום או שלב 21 ולא מסמן את הפערים PASS.
+
 התכונות מוקפאות ב־App 0.16.0, commit e2c5a91a7c8e8b5b35a73d3ae3d3beccb4ec19f4. הבנייה המקומית שנבדקה הועתקה כ־21 קבצים אל private/phase19-staging-dist; hashes ו־SHA מקור נרשמו ב־private/phase19-staging-manifest.json. הקבצים הפרטיים אינם ב־Git. בדיקת main CI עברה: https://github.com/itoosh-45/library/actions/runs/37131164114 . אין tag של candidate ואין טענה ששער 9 עבר.
 
 ## קישור ותנאים

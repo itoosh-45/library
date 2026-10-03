@@ -13,6 +13,16 @@ from candidate import REQUIRED_TESTS, pack, sha, validate_acceptance, verify
 COMMIT = "a" * 40
 
 
+class OcrAssetNames(unittest.TestCase):
+    def test_only_fixed_local_ocr_assets_are_product_files(self):
+        from candidate import safe_name, OCR_FILES
+        for name in OCR_FILES:
+            self.assertEqual(safe_name(name), name)
+        for name in ["ocr/secret.txt", "ocr/other.wasm", "ocr/../worker.min.js", "ocr/user-photo.jpg"]:
+            with self.assertRaises(ValueError):
+                safe_name(name)
+
+
 class CandidateGateTests(unittest.TestCase):
     def setUp(self):
         base = Path("private/phase20-tests").resolve(); base.mkdir(parents=True, exist_ok=True)

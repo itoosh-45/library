@@ -15,6 +15,7 @@ MAX_FILE = 5 * 1024 * 1024
 MAX_TOTAL = 20 * 1024 * 1024
 REQUIRED_TESTS = {f"T{number:02}" for number in range(1, 31)} - {"T28"}
 REQUIRED_FILES = {"index.html", "manifest.webmanifest", "service-worker.js"}
+OCR_FILES = {"ocr/worker.min.js", "ocr/tesseract-core-lstm.wasm.js", "ocr/tesseract-core-lstm.wasm", "ocr/heb.traineddata.gz", "ocr/eng.traineddata.gz", "ocr/LICENSE.tessdata.txt", "ocr/LICENSE.tesseract.txt"}
 ROOT_FIELDS = {"format", "testedCommit", "appVersion", "schemaVersion", "backupVersion", "basePath", "artifactSha256", "stagingOrigin", "freeOnly", "userReady", "oracleApplicable", "tests", "files"}
 SECRET = re.compile(rb"AIza[A-Za-z0-9_-]{20,}|sk-proj-[A-Za-z0-9_-]{20,}|-----BEGIN (?:RSA )?PRIVATE KEY-----|SECRET-CANARY")
 
@@ -26,7 +27,7 @@ def safe_name(name):
     if path.is_absolute() or ".." in path.parts or str(path) != name:
         raise ValueError("Invalid candidate file path")
     root_files = REQUIRED_FILES | {".nojekyll"}
-    allowed = name in root_files or (
+    allowed = name in root_files or name in OCR_FILES or (
         len(path.parts) == 2 and path.parts[0] in {"assets", "icons", "fonts", "templates"}
         and path.suffix in {".js", ".css", ".png", ".svg", ".ico", ".ttf", ".woff2", ".txt", ".xlsx"}
     )

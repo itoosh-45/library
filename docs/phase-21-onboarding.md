@@ -30,3 +30,12 @@ Heebo והצבעים הקיימים נשמרו: טורקיז #1F4D57, טקסט #
 לפני עדכון אישי: להוריד JSON מלא ולבדוק שמירה, לסיים עריכות ולסגור חלונות נוספים. העדכון מופעל מפורשות בהגדרות; אין מחיקת אחסון/נתונים. docs/update-recovery-runbook.md הוא ה־runbook הקיים; הנתיב upgrade-origin-runbook.md שהוזכר בדוח הקודם אינו קיים.
 
 סטטוס פרסום בשעת commit הבנייה: PENDING. תוצאות HTTPS וה־commit המדויק יתווספו לאחר הפרסום.
+## תוצאת הפרסום — 3 באוקטובר 2026
+
+מקור main שנבדק: a2cd667cf14124aa3c45f8d41ca5ccf9b9c6b34d. Pages product-pages: 8d56aa747dacd153e6ee18b00ed1fa179b7ae049; כל 21 Git blobs הושוו ל־snapshot החדש באמצעות SHA256, raw blobs ללא filters; .nojekyll ריק. camera-demo-archive אומת ללא שינוי.
+
+[Pages](https://github.com/itoosh-45/library/actions/runs/37139117277) ו־[CI מקור](https://github.com/itoosh-45/library/actions/runs/37139066123) עברו. Smoke אמיתי ב־HTTPS: PASS, בדיקה אחת ב־14.9 שניות, כל 21 hashes, manifest/scope, רענון hash route, ספר סינתטי, JSON, שחזור מוגן והשוואת כל tables, אופליין ללא page errors. PRODUCTION_MANIFEST=private/phase21-published-manifest.json. המניפסט וה־snapshot נשארים private/ignored; ראיות שלב 19 נשמרו.
+
+שלב 21 פורסם ב־https://itoosh-45.github.io/library/ . בדיקות iPhone/VoiceOver/מצלמה/ספקים חיים עדיין NOT RUN/PARTIAL, בהתאם לאישור. אין שינוי סכימה או נתונים אישיים.
+
+המשתמש ביקש לאחר מכן שלוש הצעות עיצוב שונות, בעיקר לטלפון ובהשראת Handy Library: ספרים ומדפים במרכז, כפתור צד להוספה פותח מסך. הבקשה החדשה מאשרת שלוש חלופות כהצעות; אין בחירת עיצוב חדש או החלפת ממשק המוצר עדיין.

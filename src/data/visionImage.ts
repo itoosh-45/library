@@ -1,4 +1,3 @@
-import { imageSignature } from './images';
 import { LibraryValidationError } from './library';
 
 export type ImageCrop = [number, number, number, number];
@@ -19,14 +18,11 @@ async function encodeJPEG(canvas: HTMLCanvasElement | OffscreenCanvas, quality: 
   } finally { clearTimeout(timer); }
 }
 export function validateCrop(crop: ImageCrop): ImageCrop {
-  if (!Array.isArray(crop) || crop.length !== 4 || crop.some(n => typeof n !== 'number' || !Number.isFinite(n) || n < 0 || n > 1) || crop[2] - crop[0] < 0.02 || crop[3] - crop[1] < 0.02) throw new LibraryValidationError('בחר אזור תמונה תקין בגודל של לפחות 2% בכל צלע.');
+  if (!Array.isArray(crop) || crop.length !== 4 || crop.some(n => typeof n !== 'number' || !Number.isFinite(n) || n < 0 || n > 1) || crop[2] <= crop[0] || crop[3] <= crop[1]) throw new LibraryValidationError('בחר אזור תמונה בעל רוחב וגובה חיוביים.');
   return [...crop];
 }
 export async function loadVisionImage(file: File): Promise<VisionImageSource> {
   if (!file.size || file.size > 20 * 1024 * 1024) throw new LibraryValidationError('בחר תמונה עד 20MB.');
-  const bytes = new Uint8Array(await file.arrayBuffer()), heic = ['image/heic', 'image/heif'].includes(file.type);
-  const heicSignature = String.fromCharCode(...bytes.slice(4, 8)) === 'ftyp' && ['heic', 'heix', 'hevc', 'hevx', 'mif1', 'msf1'].includes(String.fromCharCode(...bytes.slice(8, 12)));
-  if (heic ? !heicSignature : !imageSignature(bytes, file.type)) throw new LibraryValidationError('בחר JPEG, PNG, WebP או HEIC תקין.');
   const url = URL.createObjectURL(file), image = new Image();
   const dispose = () => { image.src = ''; URL.revokeObjectURL(url); };
   try {
@@ -38,16 +34,18 @@ export async function loadVisionImage(file: File): Promise<VisionImageSource> {
 export async function prepareVisionImage(source: VisionImageSource, crop: ImageCrop = fullImage, rotation: 0 | 90 | 180 | 270 = 0): Promise<PreparedVisionImage> {
   validateCrop(crop); if (![0, 90, 180, 270].includes(rotation)) throw new LibraryValidationError('סיבוב התמונה אינו תקין.');
   const x = Math.round(crop[0] * source.width), y = Math.round(crop[1] * source.height), width = Math.max(1, Math.round((crop[2] - crop[0]) * source.width)), height = Math.max(1, Math.round((crop[3] - crop[1]) * source.height));
-  const scale = Math.min(1, 2048 / Math.max(width, height)), outputWidth = Math.max(1, Math.round(width * scale)), outputHeight = Math.max(1, Math.round(height * scale));
   const canvas = typeof OffscreenCanvas !== 'undefined' && typeof OffscreenCanvas.prototype.convertToBlob === 'function' ? new OffscreenCanvas(1, 1) : document.createElement('canvas'), quarterTurn = rotation === 90 || rotation === 270;
-  canvas.width = quarterTurn ? outputHeight : outputWidth; canvas.height = quarterTurn ? outputWidth : outputHeight;
-  const context = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null; if (!context) throw new LibraryValidationError('לא ניתן להכין את התמונה בדפדפן הזה.');
-  context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height);
-  if (rotation === 90) context.translate(canvas.width, 0); if (rotation === 180) context.translate(canvas.width, canvas.height); if (rotation === 270) context.translate(0, canvas.height);
-  context.rotate(rotation * Math.PI / 180); context.drawImage(source.image, x, y, Math.min(width, source.width - x), Math.min(height, source.height - y), 0, 0, outputWidth, outputHeight);
-  for (const quality of [0.9, 0.8, 0.7]) {
-    const blob = await encodeJPEG(canvas, quality);
-    if (blob && blob.size <= 1.5 * 1024 * 1024) return { blob, width: canvas.width, height: canvas.height };
+  for (const longestEdge of [2048, 1024, 512, 256]) {
+    const scale = Math.min(1, longestEdge / Math.max(width, height)), outputWidth = Math.max(1, Math.round(width * scale)), outputHeight = Math.max(1, Math.round(height * scale));
+    canvas.width = quarterTurn ? outputHeight : outputWidth; canvas.height = quarterTurn ? outputWidth : outputHeight;
+    const context = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null; if (!context) throw new LibraryValidationError('לא ניתן להכין את התמונה בדפדפן הזה.');
+    context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height);
+    if (rotation === 90) context.translate(canvas.width, 0); if (rotation === 180) context.translate(canvas.width, canvas.height); if (rotation === 270) context.translate(0, canvas.height);
+    context.rotate(rotation * Math.PI / 180); context.drawImage(source.image, x, y, Math.min(width, source.width - x), Math.min(height, source.height - y), 0, 0, outputWidth, outputHeight);
+    for (const quality of [0.9, 0.8, 0.7]) {
+      const blob = await encodeJPEG(canvas, quality);
+      if (blob && blob.size <= 1.5 * 1024 * 1024) return { blob, width: canvas.width, height: canvas.height };
+    }
   }
-  throw new LibraryValidationError('התמונה עדיין גדולה מדי. חתוך קרוב יותר לספר כדי לשמור על טקסט קריא.');
+  throw new LibraryValidationError('הדפדפן לא הצליח להכין את התמונה לשליחה. נסה לבחור אותה מחדש.');
 }

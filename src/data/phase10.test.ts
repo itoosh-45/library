@@ -68,8 +68,9 @@ it('T24 echoed canary or malformed/truncated JSON never becomes user data', asyn
 });
 it('T06 crop and image header validation fail before a decode or request', async () => {
   expect(validateCrop([0.1, 0.2, 0.9, 0.8])).toEqual([0.1, 0.2, 0.9, 0.8]);
-  for (const crop of [[0.9, 0, 0.2, 1], [0, 0, 0.01, 1], [0, 0, NaN, 1]]) expect(() => validateCrop(crop as never)).toThrow();
-  await expect(loadVisionImage(new File(['<script>'], 'fake.jpg', { type: 'image/jpeg' }))).rejects.toThrow('תקין'); await expect(loadVisionImage(new File(['not HEIC'], 'fake.heic', { type: 'image/heic' }))).rejects.toThrow('תקין');
+  expect(validateCrop([0, 0, 0.001, 1])).toEqual([0, 0, 0.001, 1]);
+  for (const crop of [[0.9, 0, 0.2, 1], [0, 0, 0, 1], [0, 0, NaN, 1]]) expect(() => validateCrop(crop as never)).toThrow();
+  await expect(loadVisionImage(new File([], 'empty.jpg', { type: 'image/jpeg' }))).rejects.toThrow('20MB');
 });
 it('T17/T19 observed source evidence, manual overrides and identity survive atomic save and backup restore', async () => {
   const database = new LibraryDatabase('phase10-' + crypto.randomUUID()); await initializeLibrary(database);

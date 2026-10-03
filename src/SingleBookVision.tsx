@@ -24,7 +24,14 @@ export default function SingleBookVision({ onClose, onApply }: { onClose: () => 
   function invalidate() { cancel(); setPrepared(undefined); setOutcome(undefined); setSelected([]); setMessage(''); }
   async function choose(file?: File) {
     if (!file) return; invalidate(); sourceRef.current?.dispose(); sourceRef.current = undefined; setSource(undefined); setCrop([...fullImage]); setRotation(0); setWorking(true); const request = sequence.current;
-    try { const loaded = await loadVisionImage(file); if (request !== sequence.current) { loaded.dispose(); return; } sourceRef.current = loaded; setSource(loaded); setMessage('בדוק כיוון וחיתוך, ואז הכן את התמונה לפני שליחה.'); }
+    try {
+      const loaded = await loadVisionImage(file); if (request !== sequence.current) { loaded.dispose(); return; }
+      sourceRef.current = loaded; setSource(loaded);
+      const image = await prepareVisionImage(loaded); if (request !== sequence.current) return;
+      setPrepared(image);
+      if (personalVisionSession.ready && navigator.onLine) await recognize(image);
+      else setMessage('התמונה המלאה מוכנה לשליחה, ללא צורך בחיתוך. חבר מפתח אישי כדי לזהות.');
+    }
     catch (error) { if (request === sequence.current) setMessage(errorMessage(error)); }
     finally { if (request === sequence.current) setWorking(false); }
   }
@@ -34,20 +41,20 @@ export default function SingleBookVision({ onClose, onApply }: { onClose: () => 
     catch (error) { if (request === sequence.current) { setPrepared(undefined); setMessage(errorMessage(error)); } }
     finally { if (request === sequence.current) setWorking(false); }
   }
-  async function recognize() {
-    if (!prepared || !navigator.onLine) return; cancel(); const request = sequence.current; setWorking(true); setRunning(true); setOutcome(undefined); setSelected([]); setMessage('מזהה את הספר… אפשר לבטל.');
+  async function recognize(image = prepared) {
+    if (!image || !navigator.onLine) return; cancel(); const request = sequence.current; setWorking(true); setRunning(true); setOutcome(undefined); setSelected([]); setMessage('מזהה את הספר… אפשר לבטל.');
     try {
-      const hash = await hashBytes(await prepared.blob.arrayBuffer()); if (request !== sequence.current) return;
-      const value = await personalVisionSession.recognize(prepared.blob, () => { if (request === sequence.current) setMessage('המודל הראשי אינו זמין; מנסה פעם אחת את Gemini 3.7 Flash שאושר.'); });
+      const hash = await hashBytes(await image.blob.arrayBuffer()); if (request !== sequence.current) return;
+      const value = await personalVisionSession.recognize(image.blob, () => { if (request === sequence.current) setMessage('המודל הראשי אינו זמין; מנסה פעם אחת את Gemini 3.7 Flash שאושר.'); });
       if (request !== sequence.current) return; setOutcome(value); setImageHash(hash); setFetchedAt(new Date().toISOString()); setMessage(value.result.items.length ? 'בדוק את התוצאה מול התמונה ובחר שדות. הספר עדיין לא נשמר.' : 'לא זוהה ספר קריא. נסה צילום קרוב יותר או הוסף ידנית.');
     } catch (error) { if (request === sequence.current) { setReady(personalVisionSession.ready); setMessage(errorMessage(error)); } }
     finally { if (request === sequence.current) { setWorking(false); setRunning(false); } }
   }
   const item = outcome?.result.items[0];
   return <Sheet title="זיהוי ספר מתמונה" onClose={() => { cancel(); onClose(); }}>
-    {!online && <p role="status">זיהוי דורש רשת. בחירה וחיתוך תמונה זמינים במכשיר.</p>}<p className="hint">צלם כריכה, גב או שדרה עם טקסט קריא. בחירת תמונה והכנתה נשארות במכשיר; שליחה דורשת פעולה מפורשת. אין שמירה אוטומטית של ספר.</p>
+    {!online && <p role="status">זיהוי דורש רשת. בחירה וחיתוך תמונה זמינים במכשיר.</p>}<p className="hint">בחר או צלם תמונה. כשהמפתח האישי והסכמת השליחה מוגדרים, התמונה המלאה תישלח אוטומטית לזיהוי. אין צורך בחיתוך ואין שמירה אוטומטית של ספר.</p>
     <details open={!ready || undefined}><summary>מפתח אישי ותנאי שליחה</summary><VisionKey onChange={value => { cancel(); setReady(value); setOutcome(undefined); setSelected([]); }} /></details>
-    <div className="field-grid"><label className="field">בחירת תמונת ספר<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" disabled={working} onChange={event => { void choose(event.target.files?.[0]); event.target.value = ''; }} /></label><label className="field">צילום ספר במצלמה<input type="file" accept="image/*" capture="environment" disabled={working} onChange={event => { void choose(event.target.files?.[0]); event.target.value = ''; }} /></label></div>
+    <div className="field-grid"><label className="field">בחירת תמונת ספר<input type="file" accept="image/*" disabled={working} onChange={event => { void choose(event.target.files?.[0]); event.target.value = ''; }} /></label><label className="field">צילום ספר במצלמה<input type="file" accept="image/*" capture="environment" disabled={working} onChange={event => { void choose(event.target.files?.[0]); event.target.value = ''; }} /></label></div>
     {source && <section><div className="vision-image"><img src={source.url} width={source.width} height={source.height} alt="תמונת הספר לפני חיתוך" /><div className="vision-crop" style={{ left: `${crop[0] * 100}%`, top: `${crop[1] * 100}%`, right: `${(1 - crop[2]) * 100}%`, bottom: `${(1 - crop[3]) * 100}%` }} aria-hidden="true" /></div>
       <fieldset disabled={working}><legend>אזור הזיהוי בתמונה</legend><p className="hint">גבולות באחוזים לפי התמונה המקורית. המסגרת מציגה את האזור שיישלח.</p><div className="field-grid">{['גבול שמאל', 'גבול עליון', 'גבול ימין', 'גבול תחתון'].map((label, i) => <label className="field" key={label}>{label}<input type="number" min={0} max={100} step={1} value={Math.round(crop[i] * 100)} onChange={event => { invalidate(); setCrop(old => old.map((n, index) => index === i ? +event.target.value / 100 : n) as ImageCrop); }} /></label>)}</div><label className="field">סיבוב התמונה<select value={rotation} onChange={event => { invalidate(); setRotation(+event.target.value as typeof rotation); }}><option value={0}>ללא סיבוב</option><option value={90}>90°</option><option value={180}>180°</option><option value={270}>270°</option></select></label><button type="button" onClick={() => void prepare()}>הכנת התמונה לזיהוי</button></fieldset>
     </section>}

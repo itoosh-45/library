@@ -1,3 +1,4 @@
+import { safeCatalogCoverUrl } from './catalogCoverUrl';
 import type { MetadataField, MetadataSource } from './models';
 import { LibraryValidationError } from './library';
 import { comparableISBN, parseISBN } from './books';
@@ -7,7 +8,7 @@ export const metadataFields: MetadataField[] = ['title', 'subtitle', 'authors', 
 export const providerNames = { openlibrary: 'Open Library', googlebooks: 'Google Books', nli: 'הספרייה הלאומית' } as const;
 export type Provider = keyof typeof providerNames;
 export type FieldValues = MetadataSource['fieldValues'];
-export interface Candidate { provider: Provider; recordId: string; sourceUrl: string | null; fetchedAt: string; kind: 'work' | 'edition' | 'volume'; fields: FieldValues; warnings: string[] }
+export interface Candidate { provider: Provider; recordId: string; sourceUrl: string | null; fetchedAt: string; kind: 'work' | 'edition' | 'volume'; fields: FieldValues; warnings: string[]; coverUrl?: string }
 const fail = (): never => { throw new LibraryValidationError('נתוני מקור הקטלוג אינם תקינים.'); };
 const utcDate = (value: unknown): boolean => typeof value === 'string' && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 const record = (value: unknown): Record<string, unknown> => { if (!value || typeof value !== 'object' || Array.isArray(value)) return fail(); return value as Record<string, unknown>; };
@@ -34,8 +35,9 @@ export function validateFieldValues(value: unknown): FieldValues {
   return fields as FieldValues;
 }
 export function validateCandidate(value: unknown): Candidate {
-  const row = record(value), keys = ['provider', 'recordId', 'sourceUrl', 'fetchedAt', 'kind', 'fields', 'warnings'];
+  const row = record(value), keys = ['provider', 'recordId', 'sourceUrl', 'fetchedAt', 'kind', 'fields', 'warnings', ...(Object.hasOwn(row, 'coverUrl') ? ['coverUrl'] : [])];
   if (Object.keys(row).length !== keys.length || Object.keys(row).some(key => !keys.includes(key)) || !isProvider(row.provider) || typeof row.recordId !== 'string' || !row.recordId || row.recordId.length > 300 || !safeSourceUrl(row.sourceUrl) || !utcDate(row.fetchedAt) || !['work', 'edition', 'volume'].includes(row.kind as string) || !Array.isArray(row.warnings) || row.warnings.length > 10 || row.warnings.some(item => typeof item !== 'string' || item.length > 300)) return fail();
+  if (Object.hasOwn(row, 'coverUrl') && !safeCatalogCoverUrl(row.coverUrl, row.provider as string)) return fail();
   validateFieldValues(row.fields);
   if (!matchesProvider(row.provider, row.sourceUrl)) return fail();
   if (row.kind === 'work' && ['isbn10', 'isbn13', 'publicationYear', 'pages', 'publisher', 'edition', 'volume'].some(key => (row.fields as FieldValues)[key as MetadataField] != null)) return fail();

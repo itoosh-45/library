@@ -12,6 +12,18 @@ export function inputFieldValue(input: BookInput, field: MetadataField): FieldVa
   if (field === 'publicationYear' || field === 'pages') return input[field].trim() ? +input[field] : null;
   return input[field].trim() || null;
 }
+export function applyCatalogCandidate(input: BookInput, candidate: Candidate) {
+  validateCandidate(candidate);
+  const fields = metadataFields.filter(field => candidate.fields[field] != null && !(field === 'isbn10' && candidate.fields.isbn13));
+  const draft = { ...input };
+  for (const field of fields) {
+    const value = candidate.fields[field];
+    if (field === 'authors') draft.authors = [...value as string[]];
+    else if (field === 'isbn10' || field === 'isbn13') draft.isbn = String(value);
+    else draft[field] = String(value);
+  }
+  return { draft, fields };
+}
 export async function saveCatalogBook(database: LibraryDatabase, input: BookInput, candidate: Candidate, selected: MetadataField[], existing?: Book, allowDuplicate = false): Promise<Book> {
   return saveCatalogSelections(database, input, [{ candidate, selected }], existing, undefined, allowDuplicate);
 }

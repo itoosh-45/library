@@ -64,3 +64,9 @@
 ## 3 באוקטובר 2026 — אישור פרסום עם בדיקות חסרות
 
 המשתמש אישר: ״מאשר לפרסם את התוצר בכל מקרה גם אם לא עשית 100% מהבדיקות״. מותר לפרסם את הבנייה שנבדקה ב־Pages הקיים גם כשבדיקות טלפון/ספקים/מדגם אמת פתוחות, ולהמשיך לתעד ולתקן. אין צורך באישור חוזר. אין לסמן בדיקה שלא בוצעה PASS או להסיק שהפרויקט הושלם. אישור זה גובר על דרישת ההמתנה הקודמת בשלב 20 ועל האיסור הקודם להחליף את אתר המצלמה לפני השלמת השערים; הארכיון והנתונים נשמרים. נעילת התשלום אינה משתנה. מסלול הפרסום והראיות מתועדים ב־docs/phase-20-release.md.
+
+## 3 באוקטובר 2026 — בחירת ספרייה בכריכות
+
+המשתמש בחר בהצעה הראשונה ואישר להכין הסבר מלא ולהתחיל מימוש. בנוסף ביקש חיפוש אוטומטי אחרי סריקת ברקוד, העברת כל השדות הזמינים בבחירת תוצאה בלי checkboxes, ומשיכת כריכה כשקיימת. הבהיר שהכוונה לשפת הספר (שדה קיים), לא רק לשנה. docs/cover-library-design.md מתעד את ההרחבה; WORK_PLAN נשאר ללא שינוי. אישור שמירת הספר וגבולות סודות/נתונים/הוצאות נשמרים.
+
+2026-10-03: The user explicitly approved retaining the personal Gemini API key once in settings. Separate local credential IndexedDB, Free/consent required, explicit deletion, excluded from JSON/Excel; supersedes memory-only retention. Each book is primarily a cover image, with title fallback only when no image exists.

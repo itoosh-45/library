@@ -3,6 +3,7 @@ import { App } from './App';
 import { ErrorBoundary, StorageError } from './StorageError';
 import { db, initializeLibrary } from './data/database';
 import { watchDatabaseConnection, type ConnectionNotice } from './data/databaseLifecycle';
+import { restoreVisionKey } from './data/visionCredentials';
 import { registerOffline } from './pwa';
 
 export function LibraryStartup() {
@@ -19,7 +20,7 @@ export function LibraryStartup() {
   useEffect(() => {
     let stopped = false;
     const unwatch = watchDatabaseConnection(db, next => { if (!stopped) setNotice(next); });
-    void initializeLibrary(db).then(() => {
+    void Promise.all([initializeLibrary(db), restoreVisionKey()]).then(() => {
       if (stopped || cancelled.current || db.upgradePending) return;
       setReady(true); setNotice(undefined);
       void registerOffline()?.catch(() => {});

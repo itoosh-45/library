@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 
 async function openExcel(page: Page) {
   await page.goto(''); await expect(page.getByRole('heading', { name: /כל הספרים/ })).toBeVisible();
+  if (await page.getByRole('button', { name: 'עוד', exact: true }).isVisible()) await page.getByRole('button', { name: 'עוד', exact: true }).click();
   await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
   await page.getByRole('button', { name: 'פתיחת כלי Excel', exact: true }).click();
   await expect(page.getByRole('button', { name: 'יצוא הספרייה ל־Excel', exact: true })).toBeVisible();

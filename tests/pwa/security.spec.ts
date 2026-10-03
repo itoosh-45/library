@@ -5,7 +5,7 @@ async function key(page: Page) {
   await page.getByLabel('מפתח Gemini אישי', { exact: true }).fill(canary);
   await page.getByLabel('בדקתי שהפרויקט של המפתח הוא Free, ללא חיוב פעיל', { exact: true }).check();
   await page.getByLabel('אני מסכים לשליחת התמונה המוכנה ל־Google Gemini', { exact: true }).check();
-  await page.getByRole('button', { name: 'הגדרת המפתח לזיכרון בלבד', exact: true }).click();
+  await page.getByRole('button', { name: 'שמירת מפתח Gemini', exact: true }).click();
 }
 
 test('T24 production CSP blocks inline execution and foreign fetch; XSS strings and memory key stay safe through backup/reload', async ({ page }) => {
@@ -13,7 +13,7 @@ test('T24 production CSP blocks inline execution and foreign fetch; XSS strings 
   page.on('request', request => { if (request.url().includes(canary)) leaks.push(request.url()); });
   await page.goto('./#settings'); await key(page);
   await page.getByRole('link', { name: 'כל הספרים', exact: true }).click();
-  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();
   const title = '<img src=x onerror="window.xssCanary=true">';
   await page.getByLabel('שם הספר', { exact: true }).fill(title);
   await page.getByLabel('שם מחבר 1', { exact: true }).fill('<script>window.xssCanary=true</script>');
@@ -48,8 +48,8 @@ test('T24 production CSP blocks inline execution and foreign fetch; XSS strings 
       return storage.includes(secret) || responses.some(Boolean) || tables.some(Boolean);
     } finally { db.close(); }
   }, canary)).toBe(false);
-  await page.reload(); await expect(page.getByLabel('מפתח Gemini אישי', { exact: true })).toHaveValue('');
-  await expect(page.getByRole('button', { name: 'מחיקת המפתח מהזיכרון', exact: true })).toHaveCount(0);
+  await page.reload(); await expect(page.getByText('מפתח אישי מוגדר בדפדפן הזה.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'מחיקת המפתח מהמכשיר', exact: true })).toHaveCount(1);
   expect(leaks).toEqual([]);
 });
 
@@ -61,7 +61,7 @@ test('T24 production CSP permits local image preparation and only the mocked app
     const item = { title: 'ספר CSP סינתטי', authors: [], isbn: null, danacode: null, publisher: null, visibleText: 'ספר CSP סינתטי', evidenceByField: { title: ['ספר CSP סינתטי'], authors: [], isbn: [], danacode: [], publisher: [] }, imageIndex: 0, bbox: [0,0,1,1], uncertaintyReasons: [] };
     await route.fulfill({ json: { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ items: [item] }) }] } }] } });
   });
-  await page.goto('./'); await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+  await page.goto('./'); await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();
   await page.getByRole('button', { name: 'זיהוי ספר מתמונה', exact: true }).click();
   const png = await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 600; canvas.height = 800; canvas.getContext('2d')!.fillRect(0,0,600,800); return canvas.toDataURL('image/png').split(',')[1]; });
   await page.getByLabel('בחירת תמונת ספר', { exact: true }).setInputFiles({ name: 'SYNTHETIC.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });

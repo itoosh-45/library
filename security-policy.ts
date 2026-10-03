@@ -1,6 +1,6 @@
 /** Production-only policy; the development server needs its own HMR scripts. */
 export function productionSecurityPolicy(gateway = ''): string {
-  const connections = ["'self'", 'https://openlibrary.org', 'https://generativelanguage.googleapis.com'];
+  const connections = ["'self'", 'https://openlibrary.org https://covers.openlibrary.org https://books.google.com', 'https://generativelanguage.googleapis.com'];
   if (gateway) {
     const url = new URL(gateway);
     if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Invalid catalog gateway origin for CSP.');

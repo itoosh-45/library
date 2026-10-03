@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
 async function addBook(page: Page, title: string) {
-  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();
   await page.getByLabel('שם הספר', { exact: true }).fill(title);
   await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -34,22 +34,22 @@ test('optional book, multiple authors, three copies, editing, archive, narrow la
   await expect(page.getByText('עותק בארכיון', { exact: true })).toHaveCount(3);
   await page.getByRole('button', { name: 'סגירה', exact: true }).click();
   await expect(page.locator('.book-list li')).toHaveCount(0);
-  await page.getByLabel('כולל ספרים בארכיון').check();
+  await page.getByText('אפשרויות תצוגה', { exact: true }).click(); await page.getByLabel('כולל ספרים בארכיון').check();
   await expect(page.locator('.book-list li')).toHaveCount(1);
   await page.getByRole('button', { name: /בדיקת שלב ארבע.*0 עותקים/ }).click();
   await page.getByRole('button', { name: 'החזרת העותק מהארכיון' }).first().click();
   await page.getByRole('button', { name: 'סגירה', exact: true }).click(); await page.reload();
   await expect(page.getByText('שם עט מלא · מחבר נוסף')).toBeVisible();
   await expect(page.getByText('1 עותקים', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'תצוגה מורחבת' }).click(); await page.reload();
-  await expect(page.getByRole('button', { name: 'תצוגה מצומצמת' })).toBeVisible();
+  await page.getByText('אפשרויות תצוגה', { exact: true }).click(); await page.getByRole('button', { name: 'תצוגה מורחבת' }).click(); await page.reload();
+  await page.getByText('אפשרויות תצוגה', { exact: true }).click(); await expect(page.getByRole('button', { name: 'תצוגה מצומצמת' })).toBeVisible();
 });
 test('ISBN duplicate decision, unsaved dismissal and stale window edit are safe', async ({ page, context }) => {
-  await page.goto(''); await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+  await page.goto(''); await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();
   await page.getByLabel('שם הספר', { exact: true }).fill('ספר ISBN');
   await page.getByText('פרטים נוספים', { exact: true }).click(); await page.getByLabel('ISBN', { exact: true }).fill('9780306406157');
   await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click();
-  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();
   await page.getByText('פרטים נוספים', { exact: true }).click(); await page.getByLabel('ISBN', { exact: true }).fill('0306406152');
   await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'ISBN זה כבר נמצא בספרייה' })).toBeVisible();
@@ -74,7 +74,7 @@ test('real canvas image compression, validation, URL cleanup and safe backup res
     Object.defineProperty(window, 'syntheticURLCount', { get: () => active.size });
   });
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
-  await page.goto(''); await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+  await page.goto(''); await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();
   await page.getByLabel('שם הספר', { exact: true }).fill('ספר עם תמונה');
   await page.getByLabel('תמונת כריכה').setInputFiles({ name: 'not-a-photo.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('synthetic invalid photo') });
   await expect(page.getByRole('alert').filter({ hasText: 'תמונת JPEG' })).toBeVisible();
@@ -94,17 +94,17 @@ test('real canvas image compression, validation, URL cleanup and safe backup res
     return { width: image.width, height: image.height, bytes: image.byteLength, mime: image.mimeType, sha: image.sha256.length };
   });
   expect(imageCheck).toMatchObject({ width: 1200, height: 800, mime: 'image/jpeg', sha: 64 }); expect(imageCheck.bytes).toBeLessThanOrEqual(1024 * 1024);
-  await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
+  if (await page.getByRole('button', { name: 'עוד', exact: true }).isVisible()) await page.getByRole('button', { name: 'עוד', exact: true }).click(); await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
   await expect.poll(() => page.evaluate(() => Reflect.get(window, 'syntheticURLCount'))).toBe(0);
   const downloadEvent = page.waitForEvent('download'); await page.getByRole('button', { name: 'הורדת גיבוי הספרייה', exact: true }).click();
   const backup = await readFile(await (await downloadEvent).path());
   await page.getByRole('link', { name: 'כל הספרים', exact: true }).click(); await addBook(page, 'זמני לא לשחזור');
-  await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
+  if (await page.getByRole('button', { name: 'עוד', exact: true }).isVisible()) await page.getByRole('button', { name: 'עוד', exact: true }).click(); await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
   await page.getByLabel('בחירת גיבוי לשחזור').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: backup });
   await expect(page.getByRole('heading', { name: 'תצוגה מקדימה: הספרייה שלי' })).toBeVisible();
   await page.getByRole('button', { name: 'ביטול השחזור' }).click();
   await page.getByRole('link', { name: 'כל הספרים', exact: true }).click(); await expect(page.locator('.book-list li')).toHaveCount(2);
-  await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
+  if (await page.getByRole('button', { name: 'עוד', exact: true }).isVisible()) await page.getByRole('button', { name: 'עוד', exact: true }).click(); await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
   await page.getByLabel('בחירת גיבוי לשחזור').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: backup });
   await expect(page.getByRole('heading', { name: /תצוגה מקדימה/ })).toBeVisible();
   const safetyEvent = page.waitForEvent('download'); await page.getByRole('button', { name: 'הורדת גיבוי מגן לפני החלפה' }).click(); await safetyEvent;

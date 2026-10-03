@@ -16,7 +16,7 @@ test('short welcome supports keyboard, API directions, completion and reopening 
   await guide.getByRole('button', { name: 'הבא', exact: true }).click();
   await guide.getByRole('button', { name: 'הבא', exact: true }).click();
   await expect(guide).toContainText('Free ללא חיוב פעיל');
-  await expect(guide).toContainText('אחרי רענון צריך לחבר שוב');
+  await expect(guide).toContainText('המפתח נשמר בדפדפן הזה');
   await expect(guide).toContainText('עדיין אינם פעילים');
   await page.setViewportSize({ width: 360, height: 800 });
   await page.evaluate(() => document.documentElement.style.fontSize = '32px');
@@ -25,7 +25,7 @@ test('short welcome supports keyboard, API directions, completion and reopening 
   await guide.getByRole('button', { name: 'פתיחת הגדרות הזיהוי', exact: true }).click();
   await expect(guide).toHaveCount(0);
   await expect(page.getByLabel('מפתח Gemini אישי', { exact: true })).toHaveValue('');
-  await expect(page.getByRole('button', { name: 'הגדרת המפתח לזיכרון בלבד', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'שמירת מפתח Gemini', exact: true })).toBeDisabled();
   await page.reload(); await expect(guide).toHaveCount(0);
   await page.getByRole('button', { name: 'פתיחת ההיכרות הקצרה', exact: true }).click();
   await expect(guide.getByRole('heading')).toBeFocused();
@@ -50,7 +50,7 @@ test('skip survives reload and blocked preference storage still allows using the
   await page.reload();
   await page.getByRole('button', { name: 'דילוג להמשך', exact: true }).click();
   await expect(page.getByRole('region', { name: 'היכרות קצרה עם הספרייה' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();
   await page.getByLabel('שם הספר', { exact: true }).fill('ספר בדיקת פתיחה');
   await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'ספר בדיקת פתיחה', exact: true })).toBeVisible();

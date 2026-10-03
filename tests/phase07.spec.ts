@@ -28,7 +28,7 @@ test('T14 UI: three copies to two people, live badge/availability, overdue, retu
   await page.getByRole('combobox', { name: 'למי להשאיל', exact: true }).selectOption({ label: 'אדם א' }); await page.getByRole('button', { name: 'שמירת ההשאלה', exact: true }).click();
   await expect(page.locator('.book-loans .loan-entry')).toHaveCount(3); await page.keyboard.press('Escape');
   await expect(page.locator('.book-list .loan-badge')).toHaveText('מושאל · 3'); await expect(page.locator('.book-list .availability')).toHaveText('0 זמינים');
-  await page.getByText('סינון הספרים', { exact: true }).click(); await page.getByRole('combobox', { name: 'זמינות', exact: true }).selectOption('available'); await expect(page.locator('.book-list li')).toHaveCount(0);
+  await page.getByText('מיון וסינון', { exact: true }).click(); await page.getByText('סינון הספרים', { exact: true }).click(); await page.getByRole('combobox', { name: 'זמינות', exact: true }).selectOption('available'); await expect(page.locator('.book-list li')).toHaveCount(0);
   await page.getByRole('combobox', { name: 'זמינות', exact: true }).selectOption('unavailable'); await expect(page.locator('.book-list li')).toHaveCount(1);
   await page.getByRole('button', { name: /ספר השאלות סינתטי.*3 עותקים/ }).click();
   const firstCard = page.locator('.copy-card').filter({ has: page.locator('input[value="עותק ראשון"]') });

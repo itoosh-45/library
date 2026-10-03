@@ -20,6 +20,7 @@ test('T13 global live search, cumulative filters, series in every sort, original
   }
   await expect(page.getByRole('heading', { name: 'אין ספרים שמתאימים לחיפוש' })).toBeVisible();
   await page.getByRole('button', { name: 'ניקוי החיפוש והמסננים' }).click();
+  await page.getByText('מיון וסינון', { exact: true }).click();
   await page.getByText('סינון הספרים', { exact: true }).click();
   await page.getByRole('combobox', { name: 'מדף לסינון', exact: true }).selectOption(ids.rootId); await expect(page.locator('.book-list li:not([hidden])')).toHaveCount(3);
   await page.getByLabel('כולל צאצאי המדף').uncheck(); await expect(page.locator('.book-list li:not([hidden])')).toHaveCount(0); await page.getByLabel('כולל צאצאי המדף').check();

@@ -17,7 +17,7 @@ test('T28 authorized publication: exact HTTPS snapshot, hash route, protected re
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
   expect(await page.evaluate(async () => (await navigator.serviceWorker.ready).scope)).toBe(origin);
   expect(await page.evaluate(async () => (await (await fetch('manifest.webmanifest')).json()) as unknown)).toMatchObject({ id: './', scope: './', start_url: './', lang: 'he', dir: 'rtl' });
-  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();
   await page.getByLabel('שם הספר', { exact: true }).fill('ספר smoke סינתטי');
   await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);

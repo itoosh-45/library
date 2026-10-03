@@ -17,7 +17,7 @@ The product is a personal Hebrew/RTL library app. Follow the approved project pl
 - The user authorized replacing the camera experiment on main with application source. Preserve existing history. No force push or private feasibility history import.
 - GitHub Pages serves the preserved camera experiment from camera-demo-archive. Updating application source on main is not authorization to publish the unfinished product. Product deployment is a separate step.
 - Never commit personal book data, photos, API keys, server secrets, exports or raw OCR responses. Keep local data under ignored private/ or use clearly synthetic fixtures.
-- Gemini keys are personal per user, memory only. No owner key, persistence or paid fallback. Primary 3.8 Flash, one automatic backup attempt to 3.7 Flash with a visible reason, within the approved limits. The user accepted the backup model and waived its proposed live test; do not ask for it again.
+- Gemini keys are personal per user. The user explicitly approved remembering the key once in settings on 2026-10-03: keep it in a separate local credential IndexedDB, excluded from library/JSON/Excel, with explicit deletion and Free/consent gates. No owner key or paid fallback. Primary 3.8 Flash, one automatic backup attempt to 3.7 Flash with a visible reason, within the approved limits. The user accepted the backup model and waived its proposed live test; do not ask for it again.
 - No n8n backup; do not change its services as part of app development.
 - The original project plan was kept byte-identical in the private feasibility workspace; record approved extensions here rather than silently changing historical evidence.
 

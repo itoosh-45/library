@@ -20,16 +20,22 @@ async function jpegBase64(blob: Blob): Promise<string> {
   const bytes = new Uint8Array(await blob.arrayBuffer()); if (!imageSignature(bytes, 'image/jpeg')) return error('invalid', 'תמונת הזיהוי אינה תקינה.');
   let binary = ''; for (let offset = 0; offset < bytes.length; offset += 8192) binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192)); return btoa(binary);
 }
-/** Key and consent are session-only; each new key resets the cost verification. No storage or logs. */
+export function normalizeVisionKey(key: string) {
+  key = key.replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '').trim();
+  if (!/^[\x21-\x7E]{20,4096}$/.test(key)) return error('key', 'לא ניתן לקרוא את המפתח שהודבק. העתק רק את ערך המפתח, ללא רווחים פנימיים או טקסט נוסף.');
+  return key;
+}
+/** Provider requests use a memory session; explicitly authorized local retention lives separately. */
 export class VisionSession {
+  onQuotaStop?: () => void;
+  stopForQuota() { this.#quotaStopped = true; }
   #key = ''; #freeTierVerified = false; #consent = false; #quotaStopped = false;
   #controller?: AbortController; #sequence = 0;
   constructor(private fetcher: typeof fetch = (input, init) => globalThis.fetch(input, init), private timeoutMilliseconds = 60000) {}
   configure(key: string, freeTierVerified: boolean, consent: boolean) {
     this.cancel(); this.#key = ''; this.#freeTierVerified = false; this.#consent = false;
     // Validate safe header text, not an undocumented provider-specific key format.
-    key = key.replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '').trim();
-    if (!/^[\x21-\x7E]{20,4096}$/.test(key)) return error('key', 'לא ניתן לקרוא את המפתח שהודבק. העתק רק את ערך המפתח, ללא רווחים פנימיים או טקסט נוסף.');
+    key = normalizeVisionKey(key);
     this.#key = key; this.#freeTierVerified = freeTierVerified; this.#consent = consent;
   }
   clear() { this.cancel(); this.#key = ''; this.#freeTierVerified = false; this.#consent = false; }
@@ -38,7 +44,7 @@ export class VisionSession {
   get ready() { return Boolean(this.#key && this.#freeTierVerified && this.#consent && !this.#quotaStopped); }
   async recognize(blob: Blob, onBackup: () => void, mode: 'single' | 'shelf' = 'single'): Promise<VisionOutcome> {
     if (this.#quotaStopped) return error('quota', 'המכסה הסתיימה. הזיהוי נעצר; אין חידוש או רכישת קרדיטים.');
-    if (!this.#key) return error('key', 'הזן מפתח אישי בזיכרון לפני זיהוי.');
+    if (!this.#key) return error('key', 'הגדר מפתח Gemini אישי בהגדרות לפני זיהוי.');
     if (!this.#freeTierVerified || !this.#consent) return error('spending-lock', 'השליחה חסומה עד אימות מסלול ללא חיוב ואישור שליחת התמונה.');
     if (this.#controller) return error('busy', 'זיהוי כבר מתבצע.');
     const controller = new AbortController(), sequence = ++this.#sequence, key = this.#key; this.#controller = controller;
@@ -57,7 +63,7 @@ export class VisionSession {
         if (controller.signal.aborted || sequence !== this.#sequence) { await response.body?.cancel().catch(() => {}); throw cancelled(); }
         if (!response.ok) {
           await response.body?.cancel().catch(() => {});
-          if (response.status === 429) { this.#quotaStopped = true; return error('quota', 'המכסה או מגבלת הקצב הושגה. הזיהוי נעצר ללא ניסיון נוסף או רכישת קרדיטים.'); }
+          if (response.status === 429) { this.#quotaStopped = true; this.onQuotaStop?.(); return error('quota', 'המכסה או מגבלת הקצב הושגה. הזיהוי נעצר ללא ניסיון נוסף או רכישת קרדיטים.'); }
           if ([400, 401, 403].includes(response.status)) return error('key', 'המפתח או הרשאת הזיהוי נדחו. לא בוצע ניסיון נוסף.');
           // A missing model did not process the image. Do not retry ambiguous server/network failures.
           if (response.status === 404 && index === 0) { onBackup(); continue; }

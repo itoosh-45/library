@@ -10,7 +10,7 @@ test('T25 batched desktop/mobile contrast, labels, RTL, keyboard and 200-percent
     await page.keyboard.press('Tab'); await expect(page.getByRole('link', { name: 'דילוג לתוכן' })).toBeFocused();
     await page.keyboard.press('Enter'); await expect(page.locator('#main-content')).toBeFocused();
     if (section === 'books') {
-      await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+      await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
       await page.locator('summary').filter({ hasText: 'פרטים נוספים' }).click();
     }

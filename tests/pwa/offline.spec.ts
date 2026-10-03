@@ -6,7 +6,7 @@ async function open(page: Page) {
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
 }
 async function addBook(page: Page, title: string) {
-  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();
   await page.getByLabel('שם הספר', { exact: true }).fill(title);
   await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -50,7 +50,7 @@ test('production shell, manifest, all lazy assets and font survive offline; loca
   await page.getByRole('button', { name: 'סריקת ברקוד או הקלדת מזהה', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'סריקת ברקוד', exact: true })).toBeVisible();
   await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'צילום מדף בכמה תמונות', exact: true }).click();
+  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'צילום מדף בכמה תמונות', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(1); await page.keyboard.press('Escape');
   await page.reload(); await expect(page.locator('.book-list .loan-badge')).toContainText('מושאל');
   await page.locator('.book-list button').first().click(); await page.getByRole('button', { name: 'רישום החזרה', exact: true }).click();
@@ -133,7 +133,7 @@ test('real v1 to v2 waiting update preserves edits, rejects other windows, reloa
   await expect(page.getByText('סגור חלונות נוספים של הספרייה ונסה שוב.')).toBeVisible();
   await second.close();
   await page.getByRole('link', { name: 'כל הספרים', exact: true }).click();
-  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();
   await page.getByLabel('שם הספר', { exact: true }).fill('טיוטה שלא נשמרה');
   await page.evaluate(() => { window.location.hash = 'settings'; });
   await expect(page.locator('.notice').filter({ hasText: 'גרסה חדשה ממתינה' })).toHaveCount(1);

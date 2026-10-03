@@ -15,7 +15,7 @@ async function readLibrary(page: Page) {
 }
 test('injected native IndexedDB quota during large image restore preserves every prior table after reload', async ({ page }) => {
   await page.goto(''); await expect(page.getByRole('heading', { name: /כל הספרים/, level: 1 })).toBeVisible();
-  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();
   await page.getByLabel('שם הספר', { exact: true }).fill('ספר סינתטי לפני כשל אחסון');
   await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);

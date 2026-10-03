@@ -20,7 +20,7 @@ test('T11 shelf creation, multiple memberships, unique descendant counts, moves 
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto(''); await page.getByRole('link', { name: 'מדפים', exact: true }).click();
   await shelf(page, 'ראשי'); await shelf(page, 'ילד', 'ראשי'); await shelf(page, 'עלה', 'רמה 2: ילד');
-  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();
   await page.getByLabel('שם הספר', { exact: true }).fill('ספר בשלושה מדפים');
   await page.getByText('מדפים, תגיות וסדרה', { exact: true }).click();
   const choices = page.getByRole('group', { name: 'שיוך למדפים', exact: true });

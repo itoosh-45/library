@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
 async function addBook(page: Page, title: string) {
-  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();
   await page.getByLabel('שם הספר', { exact: true }).fill(title);
   await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click();
   await expect(page.locator('dialog')).toHaveCount(0);

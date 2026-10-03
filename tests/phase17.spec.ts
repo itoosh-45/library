@@ -11,7 +11,7 @@ async function libraryFingerprint(page: import('@playwright/test').Page) {
 
 test('T23 native version change retains unsaved text, blocks writes and releases without deleting the library', async ({ page }) => {
   await page.goto('./');
-  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();
   await page.getByLabel('שם הספר', { exact: true }).fill('טיוטה שלא נשמרה');
   await page.evaluate(async () => {
     const url = performance.getEntriesByType('resource').map(entry => entry.name).filter(name => name.includes('/src/data/database.ts')).at(-1)!;
@@ -65,7 +65,7 @@ test('T23 a native old connection blocks startup; cancellation does not reset it
 
 test('T23 JSON download/import transfers between native origins, preserves the source and shares a renamed path', async ({ page, context }) => {
   await page.goto('./');
-  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();
   await page.getByLabel('שם הספר', { exact: true }).fill('ספר מעבר סינתטי');
   await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click();
   await expect(page.locator('dialog')).toHaveCount(0);

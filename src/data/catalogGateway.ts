@@ -1,3 +1,4 @@
+import { safeCatalogCoverUrl } from './catalogCoverUrl';
 import { parseISBN, comparableISBN } from './books';
 import { CatalogError, readCatalogJson, retryAfterMs, type CatalogAdapter, type CatalogQuery } from './catalog';
 import { validateCandidate, type Candidate, type FieldValues } from './metadata';
@@ -18,7 +19,9 @@ export function normalizeGoogleBooks(value: unknown): Candidate[] {
     const codes = Array.isArray(row.industryIdentifiers) ? row.industryIdentifiers.slice(0, 10).flatMap(item => { const row = object(item); if (!['ISBN_10', 'ISBN_13'].includes(row.type as string) || typeof row.identifier !== 'string') return []; try { const isbn = parseISBN(row.identifier); return [isbn.isbn13 ?? isbn.isbn10!]; } catch { warnings.push('ISBN לא תקין הושמט.'); return []; } }) : [];
     if (new Set(codes.map(code => comparableISBN(parseISBN(code)))).size === 1) for (const code of codes) fields[code.length === 13 ? 'isbn13' : 'isbn10'] = code;
     else if (codes.length) warnings.push('מזהי ISBN סותרים: בדוק את המזהה על העותק.');
-    return [validateCandidate({ provider: 'googlebooks', recordId: item.id, sourceUrl: 'https://books.google.com/books?id=' + item.id, fetchedAt: new Date().toISOString(), kind: 'volume', fields, warnings })];
+    const thumbnail = row.imageLinks && typeof row.imageLinks === 'object' ? text((row.imageLinks as Record<string, unknown>).thumbnail) : undefined;
+    const coverUrl = thumbnail?.replace(/^http:/, 'https:');
+    return [validateCandidate({ ...(safeCatalogCoverUrl(coverUrl, 'googlebooks') ? { coverUrl } : {}), provider: 'googlebooks', recordId: item.id, sourceUrl: 'https://books.google.com/books?id=' + item.id, fetchedAt: new Date().toISOString(), kind: 'volume', fields, warnings })];
   });
 }
 // The configured server returns normalized NLI candidates only after its mapping has been verified.

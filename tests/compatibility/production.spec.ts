@@ -17,13 +17,13 @@ test('T28 authorized publication: exact HTTPS snapshot, hash route, protected re
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
   expect(await page.evaluate(async () => (await navigator.serviceWorker.ready).scope)).toBe(origin);
   expect(await page.evaluate(async () => (await (await fetch('manifest.webmanifest')).json()) as unknown)).toMatchObject({ id: './', scope: './', start_url: './', lang: 'he', dir: 'rtl' });
-  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();
+  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
   await page.getByLabel('שם הספר', { exact: true }).fill('ספר smoke סינתטי');
   await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
+  await page.getByRole('link', { name: 'הגדרות', exact: true }).click(); await page.getByText('גיבוי ושחזור הספרייה', { exact: true }).click();
   const hashUrl = page.url(); expect(hashUrl).toContain('#');
-  await page.reload(); expect(page.url()).toBe(hashUrl);
+  await page.reload(); expect(page.url()).toBe(hashUrl); await page.getByText('גיבוי ושחזור הספרייה', { exact: true }).click();
   await expect(page.getByRole('button', { name: 'הורדת גיבוי הספרייה', exact: true })).toBeVisible();
   const downloading = page.waitForEvent('download');
   await page.getByRole('button', { name: 'הורדת גיבוי הספרייה', exact: true }).click();
@@ -34,7 +34,7 @@ test('T28 authorized publication: exact HTTPS snapshot, hash route, protected re
     const other = await otherContext.newPage(); await other.goto(origin);
     await expect(other.getByRole('heading', { name: /כל הספרים/ })).toBeVisible();
     await expect(other.locator('.book-list li')).toHaveCount(0);
-    await other.getByRole('link', { name: 'הגדרות', exact: true }).click();
+    await other.getByRole('link', { name: 'הגדרות', exact: true }).click(); await other.getByText('גיבוי ושחזור הספרייה', { exact: true }).click();
     await other.getByLabel('בחירת גיבוי לשחזור').setInputFiles({ name: 'synthetic-production.json', mimeType: 'application/json', buffer: backup });
     await expect(other.getByRole('heading', { name: /תצוגה מקדימה/ })).toBeVisible();
     const safety = other.waitForEvent('download');
@@ -48,7 +48,7 @@ test('T28 authorized publication: exact HTTPS snapshot, hash route, protected re
     const restored = JSON.parse((await readFile((await (await restoredDownload).path())!)).toString());
     expect(restored.tables).toEqual(original.tables);
   } finally { await otherContext.close(); }
-  await context.setOffline(true); await page.reload();
+  await context.setOffline(true); await page.reload(); await page.getByText('גיבוי ושחזור הספרייה', { exact: true }).click();
   await expect(page.getByRole('button', { name: 'הורדת גיבוי הספרייה', exact: true })).toBeVisible();
   const offlineDownload = page.waitForEvent('download');
   await page.getByRole('button', { name: 'הורדת גיבוי הספרייה', exact: true }).click();

@@ -70,3 +70,7 @@
 המשתמש בחר בהצעה הראשונה ואישר להכין הסבר מלא ולהתחיל מימוש. בנוסף ביקש חיפוש אוטומטי אחרי סריקת ברקוד, העברת כל השדות הזמינים בבחירת תוצאה בלי checkboxes, ומשיכת כריכה כשקיימת. הבהיר שהכוונה לשפת הספר (שדה קיים), לא רק לשנה. docs/cover-library-design.md מתעד את ההרחבה; WORK_PLAN נשאר ללא שינוי. אישור שמירת הספר וגבולות סודות/נתונים/הוצאות נשמרים.
 
 2026-10-03: The user explicitly approved retaining the personal Gemini API key once in settings. Separate local credential IndexedDB, Free/consent required, explicit deletion, excluded from JSON/Excel; supersedes memory-only retention. Each book is primarily a cover image, with title fallback only when no image exists.
+
+
+## Simplified cover library, 2026-10-04
+User requests fewer features and a simpler interface. The latest request supersedes retaining all features in navigation. Keep books, covers/title fallback, shelves, search and direct add; backup and remembered personal Gemini remain in settings. Preserve all existing data and formats. The supplied reference site failed to load; do not claim exact matching. Continue authorized tested merges/publication.

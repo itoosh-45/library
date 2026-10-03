@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './tests', workers: 1, fullyParallel: false,
+  testMatch: ['**/simple-library.spec.ts', '**/gemini-key.spec.ts'],
   outputDir: 'test-results/browser-artifacts',
   testIgnore: ['**/pwa/**', '**/performance/**', '**/compatibility/**'],
   reporter: [['list'], ['json', { outputFile: 'test-results/browser-results.json' }]],

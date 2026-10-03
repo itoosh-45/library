@@ -5,6 +5,7 @@ test('key setup accepts a long dotted token, makes no provider request and remem
   await page.route('https://generativelanguage.googleapis.com/**', route => { requests.push(route.request().url()); return route.abort(); });
   await page.goto(process.env.KEY_TEST_PUBLIC === '1' ? 'https://itoosh-45.github.io/library/' : '');
   await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
+  await page.getByText('זיהוי ספר מתמונה · Gemini', { exact: true }).click();
   const key = '\u200fSYNTHETIC.auth.token.' + 'x'.repeat(300) + '\u200b';
   await page.getByLabel('מפתח Gemini אישי', { exact: true }).fill(key);
   await expect(page.getByLabel('מפתח Gemini אישי', { exact: true })).toHaveValue(key);
@@ -14,9 +15,11 @@ test('key setup accepts a long dotted token, makes no provider request and remem
   await expect(page.getByText('מפתח אישי מוגדר בדפדפן הזה.', { exact: true })).toBeVisible();
   expect(requests).toEqual([]);
   await page.reload();
+  await page.getByText('זיהוי ספר מתמונה · Gemini', { exact: true }).click();
   await expect(page.getByText('מפתח אישי מוגדר בדפדפן הזה.', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'מחיקת המפתח מהמכשיר', exact: true }).click();
   await page.reload();
+  await page.getByText('זיהוי ספר מתמונה · Gemini', { exact: true }).click();
   await expect(page.getByLabel('מפתח Gemini אישי', { exact: true })).toHaveValue('');
   expect(requests).toEqual([]);
 });

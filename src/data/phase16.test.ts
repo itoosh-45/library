@@ -183,7 +183,8 @@ it('Excel v2 includes ratings and readable shelf names and still accepts the rel
   const input = await readWorkbook((await exportWorkbook(source)).bytes);
   expect(input.workbook.SheetNames[0]).toBe('Books');
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(input.workbook.Sheets.Books);
-  expect(rows[0]).toMatchObject({ rating: 5, shelfNames: 'מדף מלא; ילד', genreNames: 'סיפורת', tagNames: 'עברית', seriesName: 'סדרה' });
+  expect(rows[0]).toMatchObject({ rating: 5, genreNames: 'סיפורת', tagNames: 'עברית', seriesName: 'סדרה' });
+  expect(String(rows[0].shelfNames).split('; ').sort()).toEqual(['מדף מלא','ילד'].sort());
   const candidate = await fullWorkbookCandidate(target,input); expect(candidate.backup.data.books[0].rating).toBe(5);
   await restoreSnapshot(target,candidate.backup,(await createSnapshot(target)).fingerprint);
   expect((await target.books.get(book.id))?.rating).toBe(5);

@@ -15,7 +15,7 @@ MAX_FILE = 5 * 1024 * 1024
 MAX_TOTAL = 20 * 1024 * 1024
 REQUIRED_TESTS = {f"T{number:02}" for number in range(1, 31)} - {"T28"}
 REQUIRED_FILES = {"index.html", "manifest.webmanifest", "service-worker.js"}
-OCR_FILES = {"ocr/worker.min.js", "ocr/tesseract-core-lstm.wasm.js", "ocr/tesseract-core-lstm.wasm", "ocr/heb.traineddata.gz", "ocr/eng.traineddata.gz", "ocr/LICENSE.tessdata.txt", "ocr/LICENSE.tesseract.txt"}
+OCR_FILES = {"ocr/worker.min.js", "ocr/tesseract-core-lstm.js", "ocr/tesseract-core-lstm.wasm", "ocr/heb.traineddata.gz", "ocr/eng.traineddata.gz", "ocr/LICENSE.tessdata.txt", "ocr/LICENSE.tesseract.txt"}
 ROOT_FIELDS = {"format", "testedCommit", "appVersion", "schemaVersion", "backupVersion", "basePath", "artifactSha256", "stagingOrigin", "freeOnly", "userReady", "oracleApplicable", "tests", "files"}
 SECRET = re.compile(rb"AIza[A-Za-z0-9_-]{20,}|sk-proj-[A-Za-z0-9_-]{20,}|-----BEGIN (?:RSA )?PRIVATE KEY-----|SECRET-CANARY")
 

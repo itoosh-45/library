@@ -13,7 +13,7 @@ export class LocalOcrSession {
     const timer=setTimeout(()=>{this.#sequence++;this.#reject?.(new VisionError('timeout','OCR ארך יותר מדי. נסה תמונה קרובה של ספר אחד.'));void this.#worker?.terminate().catch(()=>{});},90000);
     const run=async()=>{
       const base=new URL(import.meta.env.BASE_URL+'ocr/',location.origin).href;
-      const worker=await createWorker(['heb','eng'],OEM.LSTM_ONLY,{workerPath:base+'worker.min.js',corePath:base+'tesseract-core-lstm.wasm.js',langPath:base,workerBlobURL:false,gzip:true,logger:event=>{if(sequence===this.#sequence)progress(event.status==='recognizing text'?`OCR מקומי · ${Math.round(event.progress*100)}%`:'טוען OCR בעברית ובאנגלית…');}});
+      const worker=await createWorker(['heb','eng'],OEM.LSTM_ONLY,{workerPath:base+'worker.min.js',corePath:base+'tesseract-core-lstm.js',langPath:base,workerBlobURL:false,gzip:true,logger:event=>{if(sequence===this.#sequence)progress(event.status==='recognizing text'?`OCR מקומי · ${Math.round(event.progress*100)}%`:'טוען OCR בעברית ובאנגלית…');}});
       if(sequence!==this.#sequence){await worker.terminate();current();}this.#worker=worker;workerForJob=worker;
       await worker.setParameters({tessedit_pageseg_mode:PSM.SPARSE_TEXT});
       const url=URL.createObjectURL(blob),image=new Image();image.src=url;

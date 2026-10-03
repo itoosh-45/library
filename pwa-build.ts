@@ -2,14 +2,19 @@ import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { Plugin } from 'vite';
+import { productionSecurityPolicy } from './security-policy.ts';
 
 export function offlineBuild(): Plugin {
-  let base = '/library/', publicDirectory = 'public';
+  let base = '/library/', publicDirectory = 'public', policy = '';
   return {
     name: 'library-offline', apply: 'build', enforce: 'post',
     configResolved(config) {
       if (!config.base.startsWith('/') || !config.base.endsWith('/') || !config.publicDir) throw new Error('Offline build requires an absolute path base and public directory.');
       base = config.base; publicDirectory = config.publicDir;
+      policy = productionSecurityPolicy(config.env.VITE_CATALOG_GATEWAY ?? '');
+    },
+    transformIndexHtml() {
+      return [{ tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: policy }, injectTo: 'head-prepend' }];
     },
     generateBundle(_options, bundle) {
       const publicFiles: string[] = [];

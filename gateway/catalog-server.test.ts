@@ -16,11 +16,25 @@ it('T24 local service rejects unknown origins, foreign query fields, arbitrary U
   const search = vi.fn(async () => [candidate]), base = await start(createCatalogServer({ providers: { nli: { adapter: { provider: 'nli', search }, dailyLimit: 10 } } }));
   expect((await fetch(base + '/health')).status).toBe(200);
   expect((await request(base, undefined, { Origin: 'https://evil.test' })).status).toBe(403);
+  expect((await fetch(base + '/catalog/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: 'nli', query }) })).status).toBe(403);
   expect((await request(base, { provider: 'nli', query: { ...query, url: 'http://169.254.169.254/' } })).status).toBe(400);
   expect((await request(base, { provider: 'nli', query, api_key: 'SECRET-CANARY' })).status).toBe(400);
   expect((await request(base, { provider: 'nli', query: { ...query, title: 'x'.repeat(5000) } })).status).toBe(413);
   expect((await fetch(base + '/catalog/search', { method: 'OPTIONS', headers: { Origin: headers.Origin, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type' } })).status).toBe(204);
   expect(search).not.toHaveBeenCalled();
+});
+it('T24 rejects a third active request without calling the provider and releases slots after completion', async () => {
+  let now = Date.now(); const pending: Array<() => void> = [];
+  const search = vi.fn(() => new Promise<Candidate[]>(resolve => pending.push(() => resolve([candidate]))));
+  const base = await start(createCatalogServer({ now: () => now, providers: { nli: { adapter: { provider: 'nli', search }, dailyLimit: 10 } } }));
+  const first = request(base); await vi.waitFor(() => expect(search).toHaveBeenCalledTimes(1));
+  now += 10001;
+  const second = request(base); await vi.waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+  now += 10001;
+  expect((await request(base)).status).toBe(429); expect(search).toHaveBeenCalledTimes(2);
+  pending.shift()!(); pending.shift()!(); expect((await first).status).toBe(200); expect((await second).status).toBe(200);
+  const next = request(base); await vi.waitFor(() => expect(search).toHaveBeenCalledTimes(3));
+  pending.shift()!(); expect((await next).status).toBe(200);
 });
 it('T24 normalized results have explicit CORS, no cache and finite rate/day limits, even when the query changes', async () => {
   let now = Date.now(); const search = vi.fn(async () => [candidate]), base = await start(createCatalogServer({ now: () => now, providers: { nli: { adapter: { provider: 'nli', search }, dailyLimit: 2 } } }));
@@ -47,5 +61,6 @@ it('T24 Google server adapter fixes upstream target, omits user data, uses the s
   const adapter = googleBooksServerAdapter('SECRET-CANARY-KEY', fetcher), signal = new AbortController().signal;
   const rows = await adapter.search({ ...query, year: '2001' }, signal); expect(rows[0].fields).toEqual({ title: 'ספר סינתטי', publicationYear: 2001 });
   const [target, options] = fetcher.mock.calls[0], url = new URL(String(target)); expect(url.origin + url.pathname).toBe('https://www.googleapis.com/books/v1/volumes'); expect(url.searchParams.get('q')).toBe('intitle:"ספר בדיקה סינתטי"'); expect(options).toMatchObject({ redirect: 'error', credentials: 'omit', referrerPolicy: 'no-referrer' });
+  expect(url.searchParams.has('key')).toBe(false); expect(String(target)).not.toContain('SECRET-CANARY-KEY'); expect(new Headers(options?.headers).get('X-Goog-Api-Key')).toBe('SECRET-CANARY-KEY');
   fetcher.mockResolvedValue(new Response('SECRET-CANARY-KEY', { status: 429, headers: { 'Retry-After': '60' } })); await expect(adapter.search(query, signal)).rejects.toMatchObject({ state: 'rate-limited' }); await expect(adapter.search(query, signal)).rejects.toMatchObject({ state: 'rate-limited' }); expect(fetcher).toHaveBeenCalledTimes(2);
 });

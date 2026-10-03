@@ -15,3 +15,5 @@ button,input,select,textarea{font:inherit}select{border:1px solid #71878c;border
 .book-list li[hidden]{display:none}
 .excel-panel fieldset{display:grid;gap:12px}.excel-panel button{max-inline-size:100%}.excel-panel label,.excel-panel p{overflow-wrap:anywhere}.excel-panel table{display:block;max-inline-size:100%;overflow:auto}.excel-panel th,.excel-panel td{padding:6px;text-align:start}
 .connection-notice { position: fixed; inset: 0; z-index: 100; width: 100dvw; height: 100dvh; max-width: none; max-height: none; margin: 0; border: 0; box-sizing: border-box; overflow: auto; background: #f7f9f9; padding: 32px; }
+.brand{white-space:normal}.brand span{min-width:0;overflow-wrap:anywhere}.brand svg{flex-shrink:0}
+.page-heading{flex-wrap:wrap}.page-heading>div{min-width:0;max-width:100%}.page-heading h1{overflow-wrap:anywhere}

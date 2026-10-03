@@ -15,7 +15,7 @@ export const isProvider = (value: unknown): value is Provider => typeof value ==
 export function safeSourceUrl(value: unknown): value is string | null {
   if (value === null) return true;
   if (typeof value !== 'string' || value.length > 1000) return false;
-  try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password && !url.port && ['openlibrary.org', 'books.google.com', 'www.nli.org.il'].includes(url.hostname) && ![...url.searchParams.keys()].some(key => /key|token|secret/i.test(key)); } catch { return false; }
+  try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password && !url.port && !url.hash && ['openlibrary.org', 'books.google.com', 'www.nli.org.il'].includes(url.hostname) && ![...url.searchParams.keys()].some(key => /key|token|secret/i.test(key)); } catch { return false; }
 }
 function matchesProvider(provider: Provider, value: string | null): boolean {
   return value === null || new URL(value).hostname === ({ openlibrary: 'openlibrary.org', googlebooks: 'books.google.com', nli: 'www.nli.org.il' })[provider];

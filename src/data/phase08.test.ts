@@ -22,7 +22,7 @@ it('T15 Work metadata cannot masquerade as edition year or ISBN', () => {
   expect(() => validateCandidate({ ...candidate(), kind: 'work' })).toThrow();
   expect(validateCandidate({ ...candidate({ title: 'יצירה' }), kind: 'work' }).fields).toEqual({ title: 'יצירה' });
   for (const fields of [{ description: 'omitted' }, { pages: -1 }, { isbn13: '9780000000001' }]) expect(() => validateCandidate(candidate(fields as never))).toThrow();
-  for (const sourceUrl of ['javascript:alert(1)', 'https://evil.test/book', 'https://openlibrary.org/book?api_key=canary', 'https://user:pass@openlibrary.org/book']) expect(() => validateCandidate({ ...candidate(), sourceUrl })).toThrow();
+  for (const sourceUrl of ['javascript:alert(1)', 'https://evil.test/book', 'https://openlibrary.org/book?api_key=canary', 'https://openlibrary.org/book#api_key=canary', 'https://openlibrary.org/book?%61pi_key=canary', 'https://user:pass@openlibrary.org/book']) expect(() => validateCandidate({ ...candidate(), sourceUrl })).toThrow();
   expect(() => validateCandidate({ ...candidate(), fetchedAt: '2026-02-30T12:00:00.000Z' })).toThrow();
 });
 it('catalog stream size is bounded before the whole response is buffered', async () => {

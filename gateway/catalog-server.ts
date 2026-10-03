@@ -83,8 +83,8 @@ export function googleBooksServerAdapter(key: string, fetcher: typeof fetch = fe
     if (!terms) throw new CatalogError('unavailable', 'הוסף שם, מחבר או ISBN לחיפוש.');
     if (Date.now() < stoppedUntil) throw new CatalogError('rate-limited', 'הקטלוג ביקש להמתין.');
     const url = new URL('https://www.googleapis.com/books/v1/volumes');
-    url.search = new URLSearchParams({ q: terms, key, maxResults: '10', printType: 'books' }).toString();
-    const response = await fetcher(url, { signal, credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer' });
+    url.search = new URLSearchParams({ q: terms, maxResults: '10', printType: 'books' }).toString();
+    const response = await fetcher(url, { signal, credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', headers: { 'X-Goog-Api-Key': key } });
     if (!response.ok) {
       await response.body?.cancel();
       if (response.status === 429) { const wait = retryAfterMs(response.headers); stoppedUntil = Date.now() + wait; throw new CatalogError('rate-limited', 'הקטלוג ביקש להמתין.', wait); }

@@ -12,3 +12,5 @@ real-photos/
 *.tsbuildinfo
 test-results/
 playwright-report/
+__pycache__/
+*.pyc

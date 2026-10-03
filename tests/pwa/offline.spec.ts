@@ -23,7 +23,8 @@ test('production shell, manifest, all lazy assets and font survive offline; loca
     return { urls, manifest, scope: (await navigator.serviceWorker.ready).scope };
   });
   expect(shell.scope).toBe('http://127.0.0.1:4334/library/');
-  expect(shell.manifest).toMatchObject({ start_url: '/library/', scope: '/library/', lang: 'he', dir: 'rtl', display: 'standalone' });
+  expect(shell.manifest).toMatchObject({ start_url: './', scope: './', lang: 'he', dir: 'rtl', display: 'standalone' });
+  expect(new URL(shell.manifest.start_url, 'http://127.0.0.1:4334/library/manifest.webmanifest').pathname).toBe('/library/');
   expect(shell.urls).toContain('/library/fonts/Heebo.ttf');
   expect(shell.urls.some(url => url.includes('BarcodeScanner-'))).toBe(true);
   expect(shell.urls.some(url => url.includes('SingleBookVision-'))).toBe(true);
@@ -145,6 +146,69 @@ test('real v1 to v2 waiting update preserves edits, rejects other windows, reloa
   await expect.poll(() => page.evaluate(async () => (await caches.keys()).filter(name => name.startsWith('itoosh-library-shell-')).length)).toBe(1);
   await page.getByRole('link', { name: 'כל הספרים', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'ספר שנשאר בעדכון', exact: true })).toBeVisible();
+});
+
+test('T20/T23 explicit worker update reloads a schema-1 recovery fixture and atomically upgrades it offline', async ({ page, context, request }) => {
+  // Capture native connections only in this isolated browser. No production hook or personal DB is involved.
+  await page.addInitScript(() => {
+    const opened: IDBDatabase[] = [];
+    (window as unknown as { fixtureConnections: IDBDatabase[] }).fixtureConnections = opened;
+    const original = indexedDB.open.bind(indexedDB);
+    indexedDB.open = (name, version) => {
+      const result = version === undefined ? original(name) : original(name, version);
+      result.addEventListener('success', () => opened.push(result.result));
+      return result;
+    };
+  });
+  await open(page); await addBook(page, 'ספר בתרגיל שדרוג משולב');
+  await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
+  await request.post('http://127.0.0.1:4334/__test/build');
+  await page.getByRole('button', { name: 'בדיקת עדכון', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'עדכון ופתיחה מחדש', exact: true })).toBeVisible();
+  const libraryId = await page.evaluate(async () => {
+    const connections = (window as unknown as { fixtureConnections: IDBDatabase[] }).fixtureConnections;
+    const db = connections.find(connection => connection.name === 'itoosh-45.library.personal.v1')!;
+    const names = [...db.objectStoreNames], transaction = db.transaction(names, 'readonly');
+    const tables = await Promise.all(names.map(name => {
+      const store = transaction.objectStore(name);
+      const schema = { name, key: store.keyPath, indexes: [...store.indexNames].map(indexName => { const index = store.index(indexName); return { name: indexName, key: index.keyPath, unique: index.unique, multi: index.multiEntry }; }) };
+      return new Promise<{ schema: typeof schema; rows: Record<string, unknown>[] }>((resolve, reject) => {
+        const query = store.getAll(); query.onsuccess = () => resolve({ schema, rows: query.result }); query.onerror = () => reject(query.error);
+      });
+    }));
+    const libraryId = tables.find(table => table.schema.name === 'settings')!.rows.find(row => row.key === 'libraryId')!.value as string;
+    tables.find(table => table.schema.name === 'series')!.rows.push({ id: crypto.randomUUID(), name: 'סדרה לפני שדרוג', normalizedName: 'סדרה לפני שדרוג' });
+    for (const connection of connections) connection.close();
+    await new Promise<void>((resolve, reject) => { const query = indexedDB.deleteDatabase(db.name); query.onsuccess = () => resolve(); query.onerror = () => reject(query.error); });
+    // Restore a released schema-1 fixture before reload; this is test setup, not a product downgrade operation.
+    await new Promise<void>((resolve, reject) => {
+      const query = indexedDB.open(db.name, 10);
+      query.onupgradeneeded = () => {
+        for (const { schema, rows } of tables) {
+          const store = query.result.createObjectStore(schema.name, { keyPath: schema.key! });
+          for (const index of schema.indexes) store.createIndex(index.name, index.key, { unique: index.unique, multiEntry: index.multi });
+          for (const row of rows) store.add(row);
+        }
+      };
+      query.onsuccess = () => { query.result.close(); resolve(); }; query.onerror = () => reject(query.error);
+    });
+    return libraryId;
+  });
+  await context.setOffline(true);
+  await page.getByRole('button', { name: 'עדכון ופתיחה מחדש', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'עדכון ופתיחה מחדש', exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('שם הספרייה', { exact: true })).toBeVisible();
+  const result = await page.evaluate(async () => {
+    const db = (window as unknown as { fixtureConnections: IDBDatabase[] }).fixtureConnections.find(connection => connection.name === 'itoosh-45.library.personal.v1')!;
+    const transaction = db.transaction(['settings', 'series'], 'readonly');
+    const settings = transaction.objectStore('settings').get('libraryId'), series = transaction.objectStore('series').getAll();
+    return new Promise<{ version: number; libraryId: string; collapsed: boolean }>((resolve, reject) => {
+      transaction.oncomplete = () => resolve({ version: db.version, libraryId: settings.result.value, collapsed: series.result[0].collapsed }); transaction.onabort = () => reject(transaction.error);
+    });
+  });
+  expect(result).toEqual({ version: 20, libraryId, collapsed: false });
+  await page.getByRole('link', { name: 'כל הספרים', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'ספר בתרגיל שדרוג משולב', exact: true })).toBeVisible();
 });
 
 for (const result of ['denied', 'unsupported', 'approved'] as const) test(`storage persistence ${result} is explicit and retains backup warning`, async ({ page }) => {

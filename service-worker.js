@@ -2,7 +2,9 @@
 /* The build replaces these two constants. Only public build files enter this cache. */
 const build = '__BUILD_ID__';
 const assets = __ASSET_LIST__;
-const prefix = 'itoosh-library-shell-';
+const scope = new URL(self.registration.scope).pathname;
+// Preserve the released default cache namespace; other paths must not share its cleanup prefix.
+const prefix = scope === '/library/' ? 'itoosh-library-shell-' : 'itoosh-library-path-shell-' + encodeURIComponent(scope) + '-';
 const cacheName = prefix + build;
 const paths = new Set(assets);
 self.addEventListener('install', event => {
@@ -18,25 +20,25 @@ async function cleanOldShells() {
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     // Natural activation with no windows is safe. Explicit activation retains old lazy chunks until reload.
-    if (!(await self.clients.matchAll({ type: 'window', includeUncontrolled: true })).some(client => new URL(client.url).pathname.startsWith('/library/'))) await cleanOldShells();
+    if (!(await self.clients.matchAll({ type: 'window', includeUncontrolled: true })).some(client => new URL(client.url).pathname.startsWith(scope))) await cleanOldShells();
     await self.clients.claim();
   })());
 });
 self.addEventListener('fetch', event => {
   const request = event.request, url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== self.location.origin || url.search || request.headers.has('x-goog-api-key') || request.headers.has('authorization')) return;
-  const navigation = request.mode === 'navigate' && url.pathname.startsWith('/library/');
+  const navigation = request.mode === 'navigate' && url.pathname.startsWith(scope);
   if (!navigation && !paths.has(url.pathname)) return;
   event.respondWith((async () => {
     const cache = await caches.open(cacheName);
-    return await cache.match(navigation ? '/library/index.html' : url.pathname) ?? fetch(request);
+    return await cache.match(navigation ? scope + 'index.html' : url.pathname) ?? fetch(request);
   })());
 });
 self.addEventListener('message', event => {
   if (!event.source || !event.ports[0]) return;
   const port = event.ports[0];
   event.waitUntil((async () => {
-    const windows = (await self.clients.matchAll({ type: 'window', includeUncontrolled: true })).filter(client => new URL(client.url).pathname.startsWith('/library/'));
+    const windows = (await self.clients.matchAll({ type: 'window', includeUncontrolled: true })).filter(client => new URL(client.url).pathname.startsWith(scope));
     if (windows.length !== 1 || windows[0].id !== event.source.id) { port.postMessage('OTHER_WINDOWS'); return; }
     if (event.data === 'ACTIVATE_UPDATE') { port.postMessage('ACTIVATING'); await self.skipWaiting(); }
     if (event.data?.type === 'CLEAN_OLD_SHELLS') {

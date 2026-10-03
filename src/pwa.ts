@@ -17,7 +17,7 @@ export function registerOffline() {
       if (worker) void workerMessage(worker, { type: 'CLEAN_OLD_SHELLS', shellModule: import.meta.url }).catch(() => {});
     };
     navigator.serviceWorker.addEventListener('controllerchange', clean);
-    registration = navigator.serviceWorker.register('/library/service-worker.js', { scope: '/library/', updateViaCache: 'none' });
+    registration = navigator.serviceWorker.register(import.meta.env.BASE_URL + 'service-worker.js', { scope: import.meta.env.BASE_URL, updateViaCache: 'none' });
     void registration.then(clean).catch(() => { navigator.serviceWorker.removeEventListener('controllerchange', clean); registration = undefined; });
   }
   return registration;

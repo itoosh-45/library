@@ -17,3 +17,6 @@ button,input,select,textarea{font:inherit}select{border:1px solid #71878c;border
 .connection-notice { position: fixed; inset: 0; z-index: 100; width: 100dvw; height: 100dvh; max-width: none; max-height: none; margin: 0; border: 0; box-sizing: border-box; overflow: auto; background: #f7f9f9; padding: 32px; }
 .brand{white-space:normal}.brand span{min-width:0;overflow-wrap:anywhere}.brand svg{flex-shrink:0}
 .page-heading{flex-wrap:wrap}.page-heading>div{min-width:0;max-width:100%}.page-heading h1{overflow-wrap:anywhere}
+
+.welcome-guide{max-width:680px;background:white;border:1px solid #dae3e4;border-inline-start:3px solid #e0834a;border-radius:7px;padding:24px;margin-bottom:24px;overflow-wrap:anywhere}.welcome-progress{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px;color:#52666b}.welcome-guide h2{color:#1f4d57}.welcome-guide h2:focus{outline:3px solid #b15c2a;outline-offset:3px}.welcome-guide li{margin-bottom:10px}.welcome-footer{margin:18px 0 0}.welcome-guide .actions{flex-wrap:wrap}@media(max-width:500px){.welcome-guide{padding:18px}.welcome-progress{flex-wrap:wrap}}
+.welcome-guide .actions>button{flex:0 0 auto;max-width:100%;overflow-wrap:normal}

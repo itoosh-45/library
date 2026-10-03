@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 
 test('T28 authorized publication: exact HTTPS snapshot, hash route, protected restore and offline data', async ({ page, context, browser, request }) => {
   const origin = 'https://itoosh-45.github.io/library/';
-  const snapshot = JSON.parse(await readFile('private/phase19-staging-manifest.json', 'utf8')) as { files: { path: string; sha256: string }[] };
+  const snapshot = JSON.parse(await readFile(process.env.PRODUCTION_MANIFEST ?? 'private/phase19-staging-manifest.json', 'utf8')) as { files: { path: string; sha256: string }[] };
   for (const file of snapshot.files) {
     const response = await request.get(new URL(file.path, origin).href);
     expect(response.status(), file.path).toBe(200);

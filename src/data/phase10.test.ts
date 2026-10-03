@@ -12,6 +12,18 @@ const canary = 'DUMMY_only_memory_key_canary_0123456789';
 const jpeg = () => new Blob([new Uint8Array([255, 216, 255, 217])], { type: 'image/jpeg' });
 const reply = () => new Response(JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ items: [example()] }) }] } }] }));
 const example = () => ({ title: 'ספר סינתטי', authors: [], isbn: '9780140328721', danacode: '002001', publisher: null, visibleText: 'ספר סינתטי\n978-0-14-032872-1\n002001', evidenceByField: { title: ['ספר סינתטי'], authors: [], isbn: ['978-0-14-032872-1'], danacode: ['002001'], publisher: [] }, imageIndex: 0, bbox: [0, 0, 1, 1], uncertaintyReasons: [] });
+it('accepts longer header-safe keys and invisible paste marks without changing the token or verifying it online', async () => {
+  const key = 'SYNTHETIC.auth.token.' + 'x'.repeat(300);
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => reply()), session = new VisionSession(fetcher);
+  session.configure(' \u200f' + key + '\u200b\n', true, true);
+  expect(session.ready).toBe(true); expect(fetcher).not.toHaveBeenCalled();
+  await session.recognize(jpeg(), vi.fn());
+  expect(fetcher.mock.calls[0][1]?.headers).toMatchObject({ 'x-goog-api-key': key });
+  expect(JSON.stringify(session)).not.toContain(key);
+  for (const bad of ['short', 'x'.repeat(4097), key + '\r\nInjected: value', 'two tokens pasted together']) {
+    expect(() => session.configure(bad, true, true)).toThrow(); expect(session.hasKey).toBe(false);
+  }
+});
 it('T17 keeps observed Hebrew, raw danacode and unknown author without enrichment', () => {
   const item = validateRecognition({ items: [example()] }).items[0]; expect(item.authors).toEqual([]); expect(item.publisher).toBeNull(); expect(item.danacode).toBe('002001'); expect(item.isbn).toBe('9780140328721');
 });

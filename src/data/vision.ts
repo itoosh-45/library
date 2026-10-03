@@ -27,7 +27,9 @@ export class VisionSession {
   constructor(private fetcher: typeof fetch = (input, init) => globalThis.fetch(input, init), private timeoutMilliseconds = 60000) {}
   configure(key: string, freeTierVerified: boolean, consent: boolean) {
     this.cancel(); this.#key = ''; this.#freeTierVerified = false; this.#consent = false;
-    if (!/^[A-Za-z0-9_-]{20,200}$/.test(key)) return error('key', 'המפתח אינו תקין.');
+    // Validate safe header text, not an undocumented provider-specific key format.
+    key = key.replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '').trim();
+    if (!/^[\x21-\x7E]{20,4096}$/.test(key)) return error('key', 'לא ניתן לקרוא את המפתח שהודבק. העתק רק את ערך המפתח, ללא רווחים פנימיים או טקסט נוסף.');
     this.#key = key; this.#freeTierVerified = freeTierVerified; this.#consent = consent;
   }
   clear() { this.cancel(); this.#key = ''; this.#freeTierVerified = false; this.#consent = false; }

@@ -21,7 +21,7 @@ export interface Series extends NamedItem { collapsed: boolean }
 export interface Person extends NamedItem { archivedAt: string | null }
 export interface Loan { id: string; copyId: string; personId: string; borrowedAt: string; expectedReturnOn: string | null; returnedAt: string | null; openFlag: 0 | 1; notes: string | null; createdAt: string; updatedAt: string }
 export interface StoredImage { id: string; blob: Blob; mimeType: string; width: number; height: number; byteLength: number; sha256: string; sourceUrl: string | null; createdAt: string }
-export type SettingKey = 'libraryId' | 'libraryName' | 'displayMode' | 'preferredModel' | 'lastBackupAt';
+export type SettingKey = 'libraryId' | 'libraryName' | 'displayMode' | 'preferredModel' | 'lastBackupAt' | 'lastBackupCheckedAt';
 export interface Setting { key: SettingKey; value: string }
 export type MetadataField = 'title' | 'subtitle' | 'authors' | 'isbn10' | 'isbn13' | 'danacode' | 'publisher' | 'publicationYear' | 'edition' | 'volume' | 'language' | 'pages';
 export interface MetadataSource { id: string; bookId: string; provider: string; recordId: string; sourceUrl: string | null; fetchedAt: string; fieldValues: Partial<Record<MetadataField, string | number | string[] | null>>; selectedFields: MetadataField[]; userOverriddenFields: MetadataField[]; recognition?: { version: string; model: string; imageHash: string; item: import('./recognition').RecognizedBook; batchId?: string; itemId?: string } }

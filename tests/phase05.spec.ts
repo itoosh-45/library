@@ -124,7 +124,7 @@ test('stage 5 backup protects shelf image, all memberships and folded series thr
   await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
   const downloading = page.waitForEvent('download'); await page.getByRole('button', { name: 'הורדת גיבוי הספרייה', exact: true }).click();
   const download = await downloading, buffer = await readFile((await download.path())!); const backup = JSON.parse(buffer.toString());
-  expect(backup.version).toBe(7); expect(backup.counts).toMatchObject({ shelves: 1, bookShelves: 1, tags: 1, genres: 1, series: 1, images: 1 }); expect(backup.data.series[0].collapsed).toBe(true);
+  expect(backup.formatVersion).toBe(8); expect(backup.manifestCounts).toMatchObject({ shelves: 1, bookShelves: 1, tags: 1, genres: 1, series: 1, images: 1 }); expect(backup.tables.series[0].collapsed).toBe(true);
   await page.getByLabel('בחירת גיבוי לשחזור').setInputFiles({ name: 'stage5.json', mimeType: 'application/json', buffer });
   await expect(page.getByText(/4 ספרים.*1 מדפים.*1 שיוכים למדפים/)).toBeVisible();
   await page.getByRole('button', { name: 'ביטול השחזור', exact: true }).click();

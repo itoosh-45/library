@@ -1,0 +1,56 @@
+{
+  "format": "my-library-backup",
+  "formatVersion": 8,
+  "dbSchemaVersion": 2,
+  "appVersion": "0.13.0",
+  "libraryId": "00000015-0000-4000-8000-000000000001",
+  "exportedAt": "2026-10-03T09:00:00.000Z",
+  "tables": {
+    "books": [],
+    "copies": [],
+    "authors": [],
+    "settings": [
+      {
+        "key": "libraryId",
+        "value": "00000015-0000-4000-8000-000000000001"
+      },
+      {
+        "key": "libraryName",
+        "value": "SYNTHETIC EMPTY LIBRARY ONLY"
+      },
+      {
+        "key": "displayMode",
+        "value": "compact"
+      }
+    ],
+    "shelves": [],
+    "bookShelves": [],
+    "series": [],
+    "genres": [],
+    "tags": [],
+    "people": [],
+    "loans": [],
+    "metadataSources": [],
+    "recognitionDrafts": []
+  },
+  "images": [],
+  "manifestCounts": {
+    "books": 0,
+    "copies": 0,
+    "authors": 0,
+    "settings": 3,
+    "shelves": 0,
+    "bookShelves": 0,
+    "series": 0,
+    "genres": 0,
+    "tags": 0,
+    "people": 0,
+    "loans": 0,
+    "metadataSources": 0,
+    "recognitionDrafts": 0,
+    "images": 0
+  },
+  "checksums": {
+    "payload": "d1a6be7c949228e1a6fa1dd408dba8a6e2c4e53cad83b68a7fd9ac63deff3ebb"
+  }
+}

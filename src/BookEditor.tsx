@@ -4,7 +4,7 @@ import { db } from './data/database';
 import type { Book, Copy, MetadataField, StoredImage } from './data/models';
 import { changeCopy, duplicateBooks, emptyInput, readingStates, type BookInput } from './data/books';
 import { prepareImage } from './data/images';
-import { createSnapshot, deleteBook, downloadSnapshot, type Snapshot } from './data/backup';
+import { deleteBook, downloadSnapshot, type Snapshot } from './data/backup';
 import { errorMessage } from './data/errors';
 import { CollectionFields } from './CollectionFields';
 import { BookLoans } from './LoansPanel';
@@ -13,6 +13,7 @@ import { CatalogPanel, Provenance } from './CatalogPanel';
 import { saveBookSelections, type CatalogSelection, type RecognitionSelection } from './data/catalogSave';
 import { recognitionInput, recognitionMetadataFields } from './data/recognition';
 import { observeNearViewport } from './nearViewport';
+import { createFullSnapshot } from './data/fullBackup';
 export { Sheet } from './Sheet';
 const BarcodeScanner = lazy(() => import('./BarcodeScanner'));
 const SingleBookVision = lazy(() => import('./SingleBookVision'));
@@ -74,7 +75,7 @@ export function BookEditor({ book, authorNames, onClose, onOpen }: { book?: Book
     try { setImage(await prepareImage(file)); setDirty(true); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); }
   }
   async function protectDelete() {
-    setBusy(true); setError(''); try { const snapshot = await createSnapshot(db); downloadSnapshot(snapshot, 'before-delete'); setSafety(snapshot); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); }
+    setBusy(true); setError(''); try { const snapshot = await createFullSnapshot(db); downloadSnapshot(snapshot, 'before-delete'); setSafety(snapshot); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); }
   }
   async function remove() {
     if (!book || !safety || !confirmed) return; setBusy(true); setError('');

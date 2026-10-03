@@ -1,7 +1,7 @@
 /* global __ASSET_LIST__ */
 /* The build replaces these two constants. Only public build files enter this cache. */
-const build = '47d3bac0d3f74b6fd970';
-const assets = ["/library/assets/BarcodeScanner-hTgPoQvb.js","/library/assets/SingleBookVision-CLeCsd6l.js","/library/assets/VisionKey-DW7SNt2I.js","/library/assets/esm-BGRWGqjG.js","/library/assets/esm-BmjxaYUB.js","/library/assets/index-CenQf2OR.css","/library/assets/index-CpfHQNbn.js","/library/assets/jsx-runtime-CtB5mt2W.js","/library/index.html","/library/fonts/Heebo-OFL.txt","/library/fonts/Heebo.ttf","/library/icons/book-192.png","/library/icons/book-512.png","/library/icons/book-maskable-512.png","/library/manifest.webmanifest","/library/templates/Books-template.xlsx","/library/templates/full-example.xlsx"];
+const build = '0af148a2a7f9e4715f16';
+const assets = ["/library/assets/BarcodeScanner-CAKqrkxx.js","/library/assets/ImageBooks-BXUL1CSJ.js","/library/assets/SingleBookVision-Du7AKcv-.js","/library/assets/VisionKey-BOUOOpsR.js","/library/assets/esm-BGRWGqjG.js","/library/assets/esm-BmjxaYUB.js","/library/assets/index-Bual054j.js","/library/assets/index-rZ__5-4X.css","/library/assets/jsx-runtime-tFYXkq1l.js","/library/assets/visionImage-yD-DEIWv.js","/library/index.html","/library/fonts/Heebo-OFL.txt","/library/fonts/Heebo.ttf","/library/icons/book-192.png","/library/icons/book-512.png","/library/icons/book-maskable-512.png","/library/manifest.webmanifest","/library/templates/Books-template.xlsx","/library/templates/full-example.xlsx"];
 const scope = new URL(self.registration.scope).pathname;
 // Preserve the released default cache namespace; other paths must not share its cleanup prefix.
 const prefix = scope === '/library/' ? 'itoosh-library-shell-' : 'itoosh-library-path-shell-' + encodeURIComponent(scope) + '-';

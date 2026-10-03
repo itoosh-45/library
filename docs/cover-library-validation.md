@@ -30,4 +30,10 @@
 
 ## גבולות הראיות
 
-טלפון פיזי, Safari/VoiceOver, מצלמה ותמונות משתמש ודיוק ספק חי לא נבדקו כאן. NLI/Google Books באתר עדיין ממתינים ל־gateway מאומת. אין קריאת Gemini חיה, תשלום או התקנה חדשה. WORK_PLAN המקורי נשאר עם SHA256 `F6322F36625D3E64BDBD0B4E79ABD59E77C53839A4F542C4CEB7BF09F6D35764`. תוצאת פרסום ובדיקת HTTPS תתווסף לאחר השלמתן.
+טלפון פיזי, Safari/VoiceOver, מצלמה ותמונות משתמש ודיוק ספק חי לא נבדקו כאן. NLI/Google Books באתר עדיין ממתינים ל־gateway מאומת. אין קריאת Gemini חיה, תשלום או התקנה חדשה. WORK_PLAN המקורי נשאר עם SHA256 `F6322F36625D3E64BDBD0B4E79ABD59E77C53839A4F542C4CEB7BF09F6D35764`.
+
+## פרסום מאומת
+
+קוד המימוש `a9586aa` מוזג עם תיעוד התיקון המקביל בלי להחליפו. מקור הבנייה `a351717476fb7f1c305b4caf3a8c776064c5c670`; [בדיקות CI](https://github.com/itoosh-45/library/actions/runs/37143181794) עברו. [פריסת Pages](https://github.com/itoosh-45/library/actions/runs/37143231156) עברה, ב־`d3566ae5087118429827d6e9a82a045ea7b4f590`. המחבר `itoosh-45 <321763872+itoosh-45@users.noreply.github.com>`; המאגר https://github.com/itoosh-45/library .
+
+כל 21 קבצי הבנייה פורסמו באמצעות raw Git blobs ללא המרת שורות, ועוד `.nojekyll` ריק. manifest הפרטי `private/phase22-published-manifest.json`. ארכיון המצלמה נשאר זהה. האתר [הספרייה](https://itoosh-45.github.io/library/) עבר smoke ציבורי ב־15.4 שניות: SHA256 לכל קובץ, manifest/scope, ניווט hash, מסך ההוספה החדש, ספר סינתטי, JSON, שחזור מוגן עם השוואת כל הטבלאות, אופליין וללא שגיאות דף. מומלץ להחיל עדכון זמין מההגדרות של האפליקציה המותקנת; אין למחוק אחסון.

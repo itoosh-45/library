@@ -39,4 +39,4 @@ React/TypeScript/Vite, Dexie ו־IndexedDB מקומי. אין חשבון או ס
 
 ## Evidence on Hand
 
-docs/phase-21-onboarding.md; WORK_PLAN.md; DECISIONS.md; src/App.tsx; src/style.css. אתר App 0.17.0 ב־https://itoosh-45.github.io/library/ . ההדמיות משתמשות בספרים סינתטיים בלבד, ללא ספריית המשתמש.
+docs/phase-21-onboarding.md; WORK_PLAN.md; DECISIONS.md; src/App.tsx; src/style.css. אתר App 0.18.0 ב־https://itoosh-45.github.io/library/ . ההדמיות משתמשות בספרים סינתטיים בלבד, ללא ספריית המשתמש.

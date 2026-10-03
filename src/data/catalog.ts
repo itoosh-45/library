@@ -63,7 +63,7 @@ export function openLibraryAdapter(fetcher: typeof fetch = fetch): CatalogAdapte
   return { provider: 'openlibrary', async search(query, signal) {
     if (query.danacode) throw new CatalogError('unavailable', 'דאנאקוד דורש חיפוש ידני בקטלוג מורשה.');
     const q = query.isbn ? 'isbn:' + quote(query.isbn) : [['title', query.title], ['author', query.author], ['publisher', query.publisher], ['publish_year', query.year]].filter(([, value]) => value).map(([key, value]) => key + ':' + quote(value)).join(' AND ');
-    const params = new URLSearchParams({ q, limit: '10', lang: 'he', fields: 'key,title,author_name,editions,editions.key,editions.title,cover_i' });
+    const params = new URLSearchParams({ q, limit: '10', lang: 'he', fields: 'key,title,author_name,editions,editions.key,editions.title,cover_i,subject' });
     const response = await request('/search.json?' + params, signal);
     if (!Array.isArray(response.docs)) throw new CatalogError('error', 'תגובת החיפוש אינה תקינה.');
     const candidates: Candidate[] = [];
@@ -75,7 +75,7 @@ export function openLibraryAdapter(fetcher: typeof fetch = fetch): CatalogAdapte
       const title = string(editionKey === key ? edition?.title : work.title), fields: FieldValues = {};
       if (title) fields.title = title;
       if (!editionKey || editionKey !== key) { const authors = stringList(work.author_name); if (authors.length) fields.authors = authors; }
-      candidates.push(validateCandidate({ provider: 'openlibrary', recordId: key, sourceUrl: 'https://openlibrary.org' + key, fetchedAt: new Date().toISOString(), kind: key.startsWith('/books/') ? 'edition' : 'work', fields, ...(typeof work.cover_i === 'number' && Number.isSafeInteger(work.cover_i) && work.cover_i > 0 && work.cover_i < 1e12 && key.startsWith('/works/') ? { coverUrl: `https://covers.openlibrary.org/b/id/${work.cover_i}-M.jpg?default=false` } : {}), warnings: [key.startsWith('/books/') ? 'פרטי המהדורה ייטענו אחרי בחירה.' : 'יצירה כללית: אינה מאמתת מהדורה או ISBN.'] }));
+      candidates.push(validateCandidate({ provider: 'openlibrary', recordId: key, sourceUrl: 'https://openlibrary.org' + key, fetchedAt: new Date().toISOString(), kind: key.startsWith('/books/') ? 'edition' : 'work', fields, ...(Array.isArray(work.subject) ? { genres: stringList(work.subject).filter(name => name.length <= 120) } : {}), ...(typeof work.cover_i === 'number' && Number.isSafeInteger(work.cover_i) && work.cover_i > 0 && work.cover_i < 1e12 ? { coverUrl: `https://covers.openlibrary.org/b/id/${work.cover_i}-M.jpg?default=false` } : {}), warnings: [key.startsWith('/books/') ? 'פרטי המהדורה ייטענו אחרי בחירה.' : 'יצירה כללית: אינה מאמתת מהדורה או ISBN.'] }));
     }
     return candidates;
   }, async resolve(candidate, signal) {
@@ -99,7 +99,7 @@ export function openLibraryAdapter(fetcher: typeof fetch = fetch): CatalogAdapte
       if (names.length) fields.authors = [...new Set(names)];
     }
     const cover = Array.isArray(row.covers) ? row.covers.find(value => typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value < 1e12) : undefined;
-    return validateCandidate({ ...candidate, fields, warnings, ...(cover ? { coverUrl: `https://covers.openlibrary.org/b/id/${cover}-M.jpg?default=false` } : {}), fetchedAt: new Date().toISOString() });
+    return validateCandidate({ ...candidate, fields, warnings, ...(Array.isArray(row.subjects) ? { genres: stringList(row.subjects).filter(name => name.length <= 120) } : {}), ...(cover ? { coverUrl: `https://covers.openlibrary.org/b/id/${cover}-M.jpg?default=false` } : {}), fetchedAt: new Date().toISOString() });
   } };
 }
 export function unavailableAdapter(provider: 'nli' | 'googlebooks'): CatalogAdapter {
@@ -113,7 +113,7 @@ export class CatalogSearch {
   async search(input: CatalogQuery, update: (result: ProviderResult) => void): Promise<void> {
     const query = validateQuery(input); this.cancel(); const sequence = this.sequence, controller = new AbortController(); this.active = controller;
     await Promise.all(this.adapters.map(async adapter => {
-      const key = adapter.provider + ':v1:' + JSON.stringify(query), cached = await this.database.metadataCache.get(key);
+      const key = adapter.provider + ':v2:' + JSON.stringify(query), cached = await this.database.metadataCache.get(key);
       if (controller.signal.aborted || sequence !== this.sequence) return;
       if (cached && Date.parse(cached.expiresAt) > Date.now()) {
         try { if (cached.candidates) { const rows = cached.candidates.map(validateCandidate); if (rows.length > 20 || rows.some(row => row.provider !== adapter.provider)) throw new Error(); update({ provider: adapter.provider, state: rows.length ? 'success' : 'empty', candidates: rows, message: rows.length ? `${rows.length} מועמדים מהחיפוש האחרון` : 'אין תוצאות בחיפוש האחרון.', cached: true }); return; } } catch { await this.database.metadataCache.delete(key); }

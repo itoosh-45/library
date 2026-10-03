@@ -9,7 +9,7 @@ export function normalizeSearch(value: string): string {
     .replace(/['"‘’“”׳״`]/g, '').replace(/[ךםןףץ]/g, character => finals[character])
     .replace(/\s+/gu, ' ').trim();
 }
-export const sortLabels = { added: 'תאריך הוספה', title: 'שם', author: 'מחבר', year: 'שנה', genre: 'ז׳אנר', pages: 'עמודים', price: 'מחיר' };
+export const sortLabels = { added: 'תאריך הוספה', title: 'שם', author: 'מחבר', year: 'שנה', genre: 'ז׳אנר', pages: 'עמודים', price: 'מחיר', rating: 'דירוג', due: 'מועד החזרה' };
 export type SortKey = keyof typeof sortLabels;
 export interface LibraryFilters {
   query: string; shelfId: string; descendants: boolean; genreId: string; tagIds: string[];
@@ -36,7 +36,7 @@ export function filterBooks(data: SearchData, filters: LibraryFilters, showArchi
     if (filters.language && book.language !== filters.language) return false;
     if (filters.year && String(book.publicationYear) !== filters.year) return false;
     if (!terms.length) return true;
-    const fields = [normalizeSearch(book.title ?? ''), ...book.authorIds.map(id => authors.get(id) ?? ''), ...book.tagIds.map(id => tags.get(id) ?? '')];
+    const fields = [normalizeSearch(book.title ?? ''), ...book.authorIds.map(id => authors.get(id) ?? ''), ...book.tagIds.map(id => tags.get(id) ?? ''), book.isbn13 ?? '', book.isbn10 ?? ''];
     return terms.every(term => fields.some(field => field.includes(term)));
   });
 }
@@ -48,7 +48,7 @@ function compareOptional<T>(a: T | null, b: T | null, compare: (a: T, b: T) => n
   if (a === null || b === null) return a === b ? 0 : a === null ? 1 : -1;
   return compare(a, b) * (descending ? -1 : 1);
 }
-export function bookComparator(data: Pick<SearchData, 'authors' | 'genres' | 'copies'>, key: SortKey, descending = false): (a: Book, b: Book) => number {
+export function bookComparator(data: Pick<SearchData, 'authors' | 'genres' | 'copies'> & Partial<Pick<SearchData, 'loans'>>, key: SortKey, descending = false): (a: Book, b: Book) => number {
   const authors = new Map(data.authors.map(item => [item.id, item.displayName]));
   const genres = new Map(data.genres.map(item => [item.id, item.name]));
   const firstName = (ids: string[], names: Map<string, string>) => ids.map(id => names.get(id)).filter((name): name is string => !!name).sort(hebrewCollator.compare)[0] ?? null;
@@ -59,10 +59,16 @@ export function bookComparator(data: Pick<SearchData, 'authors' | 'genres' | 'co
     const previous = prices.get(copy.bookId), price = { currency: copy.currency, amount: copy.purchasePriceMinor };
     if (!previous || stableId(price.currency, previous.currency) < 0 || (price.currency === previous.currency && price.amount < previous.amount)) prices.set(copy.bookId, price);
   }
+  const dueDates = new Map<string, string>();
+  const copyBooks = new Map(data.copies.map(copy => [copy.id, copy.bookId]));
+  for (const loan of data.loans ?? []) {
+    const bookId = copyBooks.get(loan.copyId);
+    if (bookId && !loan.returnedAt && loan.expectedReturnOn && (!dueDates.has(bookId) || loan.expectedReturnOn < dueDates.get(bookId)!)) dueDates.set(bookId, loan.expectedReturnOn);
+  }
   const values = new Map<string, string | number | null>(); // values below are computed once for each encountered book
   const value = (book: Book): string | number | null => {
     if (values.has(book.id)) return values.get(book.id) as string | number | null;
-    const result = key === 'added' ? book.createdAt : key === 'title' ? book.title : key === 'author' ? firstName(book.authorIds, authors) : key === 'genre' ? firstName(book.genreIds, genres) : key === 'year' ? book.publicationYear : key === 'pages' ? book.pages : null;
+    const result = key === 'added' ? book.createdAt : key === 'title' ? book.title : key === 'author' ? firstName(book.authorIds, authors) : key === 'genre' ? firstName(book.genreIds, genres) : key === 'year' ? book.publicationYear : key === 'pages' ? book.pages : key === 'rating' ? book.rating ?? null : key === 'due' ? dueDates.get(book.id) ?? null : null;
     values.set(book.id, result); return result;
   };
   return (a, b) => {

@@ -5,7 +5,7 @@ export interface Book {
   publisher: string | null; publicationYear: number | null; edition: string | null;
   volume: string | null; language: string | null; pages: number | null;
   seriesId: string | null; seriesNumber: number | null; genreIds: string[]; tagIds: string[];
-  readStatus: ReadStatus; personalNotes: string | null; primaryImageId: string | null;
+  rating?: number | null; readStatus: ReadStatus; personalNotes: string | null; primaryImageId: string | null;
   createdAt: string; updatedAt: string; revision: number; titleSortKey: string;
 }
 export interface Copy {

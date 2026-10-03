@@ -81,6 +81,6 @@ export function validateShelfRecognition(value: unknown): RecognitionResult {
   if (!Array.isArray(root.items) || root.items.length > 40) return invalid();
   return { items: root.items.map(item => validateRecognition({ items: [item] }).items[0]) };
 }
-export const shelfRecognitionPrompt = recognitionPrompt.replace('Extract exactly one visible book,', 'Extract separate visible books from this shelf image, up to 40 items,')
-  + ' Preserve separate copies and similar volumes. Never deduplicate books. Give each item its own visibleText, evidence and bbox; if its location is unclear use bbox=null and report uncertainty. Never claim complete coverage of the shelf.';
+export const shelfRecognitionPrompt = recognitionPrompt.replace('Extract exactly one visible book,', 'Extract separate visible books from this image of covers, spines or barcodes, up to 40 items,')
+  + ' For barcode photos, read the printed ISBN digits only; never invent digits from unclear bars. An item with only a readable ISBN is allowed. Preserve separate copies and similar volumes. Never deduplicate books. Give each item its own visibleText, evidence and bbox; if its location is unclear use bbox=null and report uncertainty. Never claim complete coverage of the shelf.';
 export const shelfRecognitionSchema = { ...recognitionSchema, properties: { items: { ...recognitionSchema.properties.items, maxItems: 40 } } };

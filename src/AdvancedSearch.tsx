@@ -1,0 +1,16 @@
+import { normalizeSearch, sortLabels, type SearchData, type SortKey } from './data/search';
+import { defaultAdvanced, type AdvancedFilters } from './data/advancedSearch';
+export function AdvancedSearch({ filters, onChange, genres }: { filters: AdvancedFilters; onChange: (filters: AdvancedFilters) => void; genres: SearchData['genres'] }) {
+  function field(key: 'fromYear' | 'toYear' | 'addedFrom' | 'addedTo' | 'minPrice' | 'maxPrice', label: string, date = false) {
+    return <label className="field">{label}<input type={date ? 'date' : 'number'} min={date ? undefined : 0} step={key === 'minPrice' || key === 'maxPrice' ? '0.01' : undefined} value={filters[key]} onChange={event => onChange({ ...filters, [key]: event.target.value })} /></label>;
+  }
+  const changed = Object.keys(defaultAdvanced).some(key => filters[key as keyof AdvancedFilters] !== defaultAdvanced[key as keyof AdvancedFilters]);
+  return <details className="advanced-search"><summary>סינון ומיון{changed ? ' · פעיל' : ''}</summary><div className="field-grid">
+    <label className="field">מיון ספרים<select aria-label="מיון ספרים" value={filters.sort} onChange={event => onChange({ ...filters, sort: event.target.value as SortKey })}>{Object.entries(sortLabels).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label>
+    <label className="field">כיוון המיון<select aria-label="כיוון המיון" value={filters.descending ? 'desc' : 'asc'} onChange={event => onChange({ ...filters, descending: event.target.value === 'desc' })}><option value="asc">עולה · א–ת / קטן–גדול</option><option value="desc">יורד · ת–א / גדול–קטן</option></select></label>
+    <label className="field">ז׳אנר<select aria-label="ז׳אנר" value={filters.genre} onChange={event => onChange({ ...filters, genre: event.target.value })}><option value="">כל הז׳אנרים</option>{[...genres].sort((a, b) => normalizeSearch(a.name).localeCompare(normalizeSearch(b.name), 'he')).map(genre => <option key={genre.id} value={genre.id}>{genre.name}</option>)}</select></label>
+    <label className="field">מצב השאלה<select aria-label="מצב השאלה" value={filters.loan} onChange={event => onChange({ ...filters, loan: event.target.value })}><option value="">כל הספרים</option><option value="borrowed">יש עותק מושאל</option><option value="available">ללא השאלה פתוחה</option></select></label>
+    <label className="field">דירוג מינימלי<select aria-label="דירוג מינימלי" value={filters.rating} onChange={event => onChange({ ...filters, rating: event.target.value })}><option value="">כל הדירוגים</option>{[1, 2, 3, 4, 5].map(value => <option key={value} value={value}>{value} כוכבים ומעלה</option>)}</select></label>
+    {field('fromYear', 'שנת הוצאה מ־')}{field('toYear', 'שנת הוצאה עד')}{field('addedFrom', 'נוסף מתאריך', true)}{field('addedTo', 'נוסף עד תאריך', true)}{field('minPrice', 'מחיר מינימלי בש״ח')}{field('maxPrice', 'מחיר מקסימלי בש״ח')}
+  </div>{changed && <button className="secondary" onClick={() => onChange({ ...defaultAdvanced })}>איפוס סינון ומיון</button>}</details>;
+}

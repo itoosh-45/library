@@ -62,12 +62,11 @@ test('T24 production CSP permits local image preparation and only the mocked app
     await route.fulfill({ json: { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ items: [item] }) }] } }] } });
   });
   await page.goto('./'); await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
-  await page.getByText('מילוי אוטומטי מסריקה או תמונה', { exact: true }).click(); await page.getByRole('button', { name: 'זיהוי ספר מתמונה', exact: true }).click();
+  await page.getByRole('button', { name: 'הוספה מתמונה · ספרים או ברקודים', exact: true }).click();
   const png = await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 600; canvas.height = 800; canvas.getContext('2d')!.fillRect(0,0,600,800); return canvas.toDataURL('image/png').split(',')[1]; });
+  await key(page);
   await page.getByLabel('בחירת תמונת ספר', { exact: true }).setInputFiles({ name: 'SYNTHETIC.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
-  await expect(page.getByRole('img', { name: 'תמונה מוכנה לשליחה לזיהוי', exact: true })).toBeVisible();
-  await key(page); await page.getByRole('button', { name: 'שליחת התמונה לזיהוי', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'פרטי הספר שזוהה', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'ספרים שזוהו (1)', exact: true })).toBeVisible();
   expect(requests).toHaveLength(1); expect(requests[0]).not.toContain(canary);
-  await expect(page.getByRole('button', { name: 'שימוש בפרטי הספר' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'הוספת 1 ספרים לספרייה' })).toBeEnabled();
 });

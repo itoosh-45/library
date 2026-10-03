@@ -1,14 +1,14 @@
 import type { LibraryDatabase } from './database';
 import type { Book, Copy, ReadStatus, StoredImage } from './models';
 import { createBookWithCopy, LibraryValidationError, normalizeText } from './library';
-import { removeUnusedImage } from './collections';
+import { removeUnusedImage, saveNamedItem } from './collections';
 
 export const readingStates: Record<ReadStatus, string> = { unread: 'טרם נקרא', reading: 'בקריאה', read: 'נקרא', abandoned: 'הופסק', 'want-to-read': 'רוצה לקרוא' };
 export interface BookInput {
   title: string; subtitle: string; authors: string[]; readStatus: ReadStatus;
   isbn: string; danacode: string; publisher: string; publicationYear: string;
   edition: string; volume: string; language: string; pages: string; personalNotes: string;
-  shelfIds?: string[]; genreIds?: string[]; tagIds?: string[]; seriesId?: string | null; seriesNumber?: string;
+  price?: string; genreNames?: string[]; rating?: number | null; shelfIds?: string[]; genreIds?: string[]; tagIds?: string[]; seriesId?: string | null; seriesNumber?: string;
 }
 export const emptyInput: BookInput = { title: '', subtitle: '', authors: [], readStatus: 'unread', isbn: '', danacode: '', publisher: '', publicationYear: '', edition: '', volume: '', language: '', pages: '', personalNotes: '' };
 const fail = (message: string): never => { throw new LibraryValidationError(message); };
@@ -31,7 +31,8 @@ export function parseISBN(value: string): { isbn10: string | null; isbn13: strin
 }
 export function bookFields(input: BookInput) {
   if (typeof input.readStatus !== 'string' || !Object.hasOwn(readingStates, input.readStatus)) return fail('מצב הקריאה אינו תקין.');
-  return { title: optional(input.title), subtitle: optional(input.subtitle), ...parseISBN(input.isbn), danacode: optional(input.danacode), publisher: optional(input.publisher), publicationYear: number(input.publicationYear, 9999), edition: optional(input.edition), volume: optional(input.volume), language: optional(input.language), pages: number(input.pages, 100000), personalNotes: optional(input.personalNotes, 20000), readStatus: input.readStatus, titleSortKey: normalizeText(input.title) };
+  if (input.rating !== undefined && input.rating !== null && (!Number.isInteger(input.rating) || input.rating < 1 || input.rating > 5)) return fail('הדירוג צריך להיות בין כוכב אחד לחמישה.');
+  return { ...(input.rating === undefined ? {} : { rating: input.rating }), title: optional(input.title), subtitle: optional(input.subtitle), ...parseISBN(input.isbn), danacode: optional(input.danacode), publisher: optional(input.publisher), publicationYear: number(input.publicationYear, 9999), edition: optional(input.edition), volume: optional(input.volume), language: optional(input.language), pages: number(input.pages, 100000), personalNotes: optional(input.personalNotes, 20000), readStatus: input.readStatus, titleSortKey: normalizeText(input.title) };
 }
 export function comparableISBN(book: Pick<Book, 'isbn10' | 'isbn13'>): string | null {
   if (book.isbn13) return book.isbn13;
@@ -49,6 +50,7 @@ export async function duplicateBooks(database: LibraryDatabase, input: BookInput
 }
 export async function saveBook(database: LibraryDatabase, input: BookInput, existing?: Book, image?: StoredImage | null, allowDuplicate = false): Promise<Book> {
   const fields = bookFields(input);
+  const price = input.price === undefined ? undefined : parsePrice(input.price);
   if (!Array.isArray(input.authors) || input.authors.length > 30) return fail('רשימת המחברים אינה תקינה.');
   const names = [...new Set(input.authors.map(name => optional(name)).filter((name): name is string => !!name))];
   return database.transaction('rw', [database.books, database.copies, database.authors, database.images, database.shelves, database.bookShelves, database.genres, database.tags, database.series, database.metadataSources, database.recognitionDrafts], async () => {
@@ -56,6 +58,15 @@ export async function saveBook(database: LibraryDatabase, input: BookInput, exis
     if (existing && (!current || current.revision !== existing.revision)) return fail('הספר השתנה בחלון אחר. סגור ופתח אותו מחדש לפני העריכה.');
     if (!allowDuplicate && (await duplicateBooks(database, input, existing?.id)).length) return fail('ISBN זה כבר נמצא בספרייה. בחר כיצד להמשיך.');
     const classification = { genreIds: input.genreIds === undefined ? current?.genreIds ?? [] : input.genreIds, tagIds: input.tagIds === undefined ? current?.tagIds ?? [] : input.tagIds, seriesId: input.seriesId === undefined ? current?.seriesId ?? null : input.seriesId, seriesNumber: current?.seriesNumber ?? null };
+    if (input.genreNames !== undefined) {
+      if (!Array.isArray(input.genreNames) || input.genreNames.length > 20 || input.genreNames.some(name => typeof name !== 'string' || name.length > 120)) return fail('רשימת הז׳אנרים אינה תקינה.');
+      classification.genreIds = [];
+      for (const name of [...new Set(input.genreNames.map(name => name.trim()).filter(Boolean))]) {
+        const existingGenre = await database.genres.where('normalizedName').equals(normalizeText(name)).first();
+        const genre = existingGenre ?? await saveNamedItem(database, 'genres', name);
+        if (!classification.genreIds.includes(genre.id)) classification.genreIds.push(genre.id);
+      }
+    }
     const shelfIds = input.shelfIds === undefined ? (current ? (await database.bookShelves.where('bookId').equals(current.id).toArray()).map(link => link.shelfId) : []) : input.shelfIds;
     for (const [ids, table] of [[classification.genreIds, database.genres], [classification.tagIds, database.tags], [shelfIds, database.shelves]] as const) {
       if (!Array.isArray(ids) || ids.length > 1000 || ids.some(id => typeof id !== 'string' || !id) || new Set(ids).size !== ids.length || (await table.bulkGet(ids)).some(item => !item)) return fail('אחד האוספים שנבחרו אינו קיים. בחר את השיוכים מחדש.');
@@ -81,6 +92,11 @@ export async function saveBook(database: LibraryDatabase, input: BookInput, exis
     if (image) await database.images.put(image);
     const book = { ...base, ...fields, ...classification, authorIds, primaryImageId: image === undefined ? base.primaryImageId : image?.id ?? null, updatedAt: new Date().toISOString(), revision: current ? current.revision + 1 : 1 };
     await database.books.put(book);
+    if (price !== undefined) {
+      const primaryCopy = (await database.copies.where('bookId').equals(book.id).toArray()).filter(copy => !copy.archivedAt).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))[0];
+      if (!primaryCopy) return fail('אין עותק פעיל להזנת מחיר.');
+      await database.copies.update(primaryCopy.id, { purchasePriceMinor: price, currency: price === null ? null : 'ILS', updatedAt: book.updatedAt });
+    }
     if (current) {
       const previousNames = (await database.authors.bulkGet(current.authorIds)).map(author => author!.displayName);
       const sources = await database.metadataSources.where('bookId').equals(book.id).toArray();
@@ -99,8 +115,7 @@ export async function saveBook(database: LibraryDatabase, input: BookInput, exis
 export async function changeCopy(database: LibraryDatabase, bookId: string, revision: number, input: { id?: string; label?: string; notes?: string; price?: string; archive?: boolean }): Promise<Copy> {
   if (input.archive !== undefined && typeof input.archive !== 'boolean') return fail('מצב הארכוב אינו תקין.');
   const label = optional(input.label ?? ''), notes = optional(input.notes ?? '', 20000);
-  const price = input.price?.trim() ?? '';
-  if (price && (!/^\d+(\.\d{1,2})?$/.test(price) || +price > 1000000)) return fail('מחיר העותק אינו תקין.');
+  const price = parsePrice(input.price ?? '');
   return database.transaction('rw', [database.books, database.copies, database.loans], async () => {
     const book = await database.books.get(bookId);
     if (!book || book.revision !== revision) return fail('הספר השתנה. סגור ופתח אותו מחדש לפני השינוי.');
@@ -108,9 +123,16 @@ export async function changeCopy(database: LibraryDatabase, bookId: string, revi
     const copy = input.id ? await database.copies.get(input.id) : { id: crypto.randomUUID(), bookId, label: null, notes: null, purchasePriceMinor: null, currency: null, archivedAt: null, createdAt: now, updatedAt: now };
     if (!copy || copy.bookId !== bookId) return fail('העותק אינו קיים בספר הזה.');
     if (input.archive && await database.loans.where('[copyId+openFlag]').equals([copy.id, 1]).count()) return fail('העותק מושאל כעת. יש לרשום את החזרתו לפני ארכוב.');
-    const changed: Copy = { ...copy, label, notes, purchasePriceMinor: price ? Math.round(+price * 100) : null, currency: price ? 'ILS' : null, archivedAt: input.archive === undefined ? copy.archivedAt : input.archive ? now : null, updatedAt: now };
+    const changed: Copy = { ...copy, label, notes, purchasePriceMinor: price, currency: price === null ? null : 'ILS', archivedAt: input.archive === undefined ? copy.archivedAt : input.archive ? now : null, updatedAt: now };
     await database.copies.put(changed);
     await database.books.update(book.id, { revision: book.revision + 1, updatedAt: now });
     return changed;
   });
+}
+
+export function parsePrice(value: string): number | null {
+  if (typeof value !== 'string') return fail('המחיר אינו תקין.');
+  const price = value.trim();
+  if (price && (!/^\d+(\.\d{1,2})?$/.test(price) || +price > 1000000)) return fail('המחיר צריך להיות סכום חיובי בשקלים, עד שתי ספרות אחרי הנקודה.');
+  return price ? Math.round(+price * 100) : null;
 }

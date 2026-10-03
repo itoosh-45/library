@@ -15,7 +15,7 @@ export function inputFieldValue(input: BookInput, field: MetadataField): FieldVa
 export function applyCatalogCandidate(input: BookInput, candidate: Candidate) {
   validateCandidate(candidate);
   const fields = metadataFields.filter(field => candidate.fields[field] != null && !(field === 'isbn10' && candidate.fields.isbn13));
-  const draft = { ...input };
+  const draft = { ...input, ...(candidate.genres?.length ? { genreNames: [...candidate.genres] } : {}) };
   for (const field of fields) {
     const value = candidate.fields[field];
     if (field === 'authors') draft.authors = [...value as string[]];

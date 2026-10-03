@@ -11,13 +11,15 @@ export function validateReview(value: unknown): DraftReview {
   const row = record(value), keys = ['input', 'catalogs', 'decision', 'targetBookId', 'targetRevision', 'allowDuplicate'];
   if (Object.keys(row).length !== keys.length || Object.keys(row).some(key => !keys.includes(key)) || ![null, 'new', 'copy'].includes(row.decision as null | string) || typeof row.allowDuplicate !== 'boolean') return fail();
   if (row.decision === 'copy' ? !uuid(row.targetBookId) || !Number.isSafeInteger(row.targetRevision) || (row.targetRevision as number) < 1 || row.allowDuplicate : row.targetBookId !== null || row.targetRevision !== null) return fail();
-  const input = record(row.input), required = Object.keys(emptyInput), extra = ['shelfIds', 'genreIds', 'tagIds', 'seriesId', 'seriesNumber'];
+  const input = record(row.input), required = Object.keys(emptyInput), extra = ['shelfIds', 'genreIds', 'tagIds', 'seriesId', 'seriesNumber', 'genreNames', 'price', 'rating'];
   if (required.some(key => !Object.hasOwn(input, key)) || Object.keys(input).some(key => !required.includes(key) && !extra.includes(key))) return fail();
   for (const key of required.filter(key => key !== 'authors')) if (typeof input[key] !== 'string' || (input[key] as string).length > (key === 'personalNotes' ? 20000 : 1000)) return fail();
   if (!Array.isArray(input.authors) || input.authors.length > 30 || input.authors.some(name => typeof name !== 'string' || name.length > 1000)) return fail();
   for (const key of ['shelfIds', 'genreIds', 'tagIds']) if (input[key] !== undefined && (!Array.isArray(input[key]) || (input[key] as unknown[]).length > 1000 || new Set(input[key] as unknown[]).size !== (input[key] as unknown[]).length || (input[key] as unknown[]).some(id => !uuid(id)))) return fail();
   if (input.seriesId !== undefined && input.seriesId !== null && !uuid(input.seriesId)) return fail();
   if (input.seriesNumber !== undefined && (typeof input.seriesNumber !== 'string' || (input.seriesNumber && (!/^\d+(\.\d+)?$/.test(input.seriesNumber) || +input.seriesNumber > 1000000 || !input.seriesId)))) return fail();
+  if (input.price !== undefined && (typeof input.price !== 'string' || input.price.length > 1000)) return fail();
+  if (input.genreNames !== undefined && (!Array.isArray(input.genreNames) || input.genreNames.length > 20 || input.genreNames.some(name => typeof name !== 'string' || name.length > 120))) return fail();
   bookFields(input as unknown as BookInput);
   if (!Array.isArray(row.catalogs) || row.catalogs.length > metadataFields.length) return fail();
   const selected = new Set<string>();

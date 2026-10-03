@@ -52,7 +52,7 @@ export async function envelope(core: Core): Promise<Backup> {
   if (estimated > MAX_BACKUP_BYTES) return bad('הגיבוי גדול מדי (עד 150 מגה־בייט). אין שינוי בספרייה.');
   const { images, ...tables } = core;
   const data: Payload = { ...tables, images: await Promise.all(images.map(async ({ blob, ...image }) => ({ ...image, base64: encode(new Uint8Array(await blob.arrayBuffer())) }))) };
-  return { format: 'personal-library-basic', version: 7, schemaVersion: 2, appVersion: '0.19.0', libraryId: core.settings.find(setting => setting.key === 'libraryId')!.value, exportedAt: new Date().toISOString(), counts: countsOf(core), checksum: await hashBytes(new TextEncoder().encode(JSON.stringify(data)).buffer), data };
+  return { format: 'personal-library-basic', version: 7, schemaVersion: 2, appVersion: '0.20.0', libraryId: core.settings.find(setting => setting.key === 'libraryId')!.value, exportedAt: new Date().toISOString(), counts: countsOf(core), checksum: await hashBytes(new TextEncoder().encode(JSON.stringify(data)).buffer), data };
 }
 export async function createSnapshot(database: LibraryDatabase, full = false): Promise<Snapshot> {
   const core = await database.transaction('r', database.tables, () => readCore(database));
@@ -130,7 +130,8 @@ export async function validateBackup(source: string): Promise<ValidatedBackup> {
   }
   const bookKeys = ['id', 'title', 'subtitle', 'authorIds', 'isbn10', 'isbn13', 'danacode', 'publisher', 'publicationYear', 'edition', 'volume', 'language', 'pages', 'seriesId', 'seriesNumber', 'genreIds', 'tagIds', 'readStatus', 'personalNotes', 'primaryImageId', 'createdAt', 'updatedAt', 'revision', 'titleSortKey'];
   for (const book of payload.books) {
-    exact(book, bookKeys);
+    exact(book, Object.hasOwn(book, 'rating') ? [...bookKeys, 'rating'] : bookKeys);
+    if (book.rating !== undefined && book.rating !== null && !integer(book.rating, 1, 5)) return bad();
     for (const key of ['title', 'subtitle', 'danacode', 'publisher', 'edition', 'volume', 'language', 'personalNotes'] as const) if (!nullable(book[key])) return bad();
     if (!strings(book.authorIds) || book.authorIds.some(id => !authorIds.has(id)) || !strings(book.genreIds) || book.genreIds.some(id => !genreIds.has(id)) || !strings(book.tagIds) || book.tagIds.some(id => !tagIds.has(id)) || (book.seriesId !== null && !seriesIds.has(book.seriesId)) || (book.seriesNumber !== null && (book.seriesId === null || typeof book.seriesNumber !== 'number' || !Number.isFinite(book.seriesNumber) || book.seriesNumber < 0 || book.seriesNumber > 1000000))) return bad();
     if ((book.publicationYear !== null && !integer(book.publicationYear, 1, 9999)) || (book.pages !== null && !integer(book.pages, 1, 100000)) || !integer(book.revision, 1, Number.MAX_SAFE_INTEGER) || !date(book.createdAt) || !date(book.updatedAt) || typeof book.readStatus !== 'string' || !Object.hasOwn(readingStates, book.readStatus) || book.titleSortKey !== normalizeText(book.title ?? '')) return bad();

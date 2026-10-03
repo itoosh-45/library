@@ -70,3 +70,19 @@ export async function returnCopy(database: LibraryDatabase, id: string, returned
     await database.loans.update(id, { returnedAt, openFlag: 0, updatedAt: now.toISOString() });
   });
 }
+
+export function loanReturnDay(borrowedOn: string, days: number): string {
+  if (!validDay(borrowedOn) || !Number.isInteger(days) || days < 1 || days > 3650) return fail('בחר משך השאלה של 1 עד 3650 ימים.');
+  const [year, month, day] = borrowedOn.split('-').map(Number);
+  const result = localDay(new Date(year, month - 1, day + days, 12));
+  if (!validDay(result)) return fail('תאריך ההחזרה אינו תקין.');
+  return result;
+}
+export async function changeLoanReturnDay(database: LibraryDatabase, id: string, expected: string | null, date: string) {
+  await database.transaction('rw', database.loans, async () => {
+    const loan = await database.loans.get(id);
+    if (!loan || loan.returnedAt !== null || loan.expectedReturnOn !== expected) return fail('ההשאלה השתנתה. פתח מחדש את הפרטים.');
+    if (!validDay(date) || date < localDay(new Date(loan.borrowedAt))) return fail('ההחזרה צריכה להיות אחרי תחילת ההשאלה.');
+    await database.loans.update(id, { expectedReturnOn: date, updatedAt: new Date().toISOString() });
+  });
+}

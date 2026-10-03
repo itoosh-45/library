@@ -14,7 +14,7 @@ async function changedBackup(edit: (backup: ReturnType<typeof JSON.parse>) => vo
   return JSON.stringify(backup);
 }
 it('optional fields, whole author names, three copies, archive/reopen and revision protection survive reopening', async () => {
-  const original = await saveBook(database, { ...emptyInput, authors: ['שם עט מלא', 'דנה בדיקה', 'דנה בדיקה'], rating: 9 } as never);
+  const original = await saveBook(database, { ...emptyInput, authors: ['שם עט מלא', 'דנה בדיקה', 'דנה בדיקה'], unsupportedField: 9 } as never);
   expect(original.title).toBeNull(); expect(original.authorIds).toHaveLength(2); expect(original).not.toHaveProperty('rating');
   expect((await database.authors.get(original.authorIds[0]))?.displayName).toBe('שם עט מלא');
   const second = await changeCopy(database, original.id, 1, { label: 'עותק שני', price: '12.30' });

@@ -4,7 +4,7 @@ export const MAX_BACKUP_BYTES = 150 * 1024 * 1024;
 
 export function fullEnvelope(legacy: { data: object & { images: unknown[] }; appVersion: string; libraryId: string; exportedAt: string; counts: object; checksum: string }) {
   const { images, ...tables } = legacy.data;
-  return { format: 'my-library-backup', formatVersion: 8, dbSchemaVersion: 2, appVersion: legacy.appVersion,
+  return { format: 'my-library-backup', formatVersion: 'books' in tables && Array.isArray(tables.books) && tables.books.some(book => Object.hasOwn(book, 'rating')) ? 9 : 8, dbSchemaVersion: 2, appVersion: legacy.appVersion,
     libraryId: legacy.libraryId, exportedAt: legacy.exportedAt, tables, images, manifestCounts: legacy.counts,
     checksums: { payload: legacy.checksum } };
 }
@@ -15,7 +15,7 @@ export function legacyEnvelope(input: unknown): unknown {
   const root = input as Record<string, unknown>;
   const keys = ['format', 'formatVersion', 'dbSchemaVersion', 'appVersion', 'libraryId', 'exportedAt', 'tables', 'images', 'manifestCounts', 'checksums'];
   const fail = (): never => { throw new LibraryValidationError('פורמט או בדיקת שלמות הגיבוי אינם תקינים. הספרייה לא שונתה.'); };
-  if (Object.keys(root).length !== keys.length || Object.keys(root).some(key => !keys.includes(key)) || root.formatVersion !== 8 || root.dbSchemaVersion !== 2) return fail();
+  if (Object.keys(root).length !== keys.length || Object.keys(root).some(key => !keys.includes(key)) || ![8, 9].includes(root.formatVersion as number) || root.dbSchemaVersion !== 2) return fail();
   if (!root.tables || typeof root.tables !== 'object' || Array.isArray(root.tables) || Object.hasOwn(root.tables, 'images') || !Array.isArray(root.images)) return fail();
   const checksums = root.checksums as Record<string, unknown> | null;
   if (!checksums || typeof checksums !== 'object' || Object.keys(checksums).length !== 1 || typeof checksums.payload !== 'string') return fail();

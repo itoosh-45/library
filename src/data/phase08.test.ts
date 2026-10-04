@@ -106,3 +106,12 @@ it('T15 gateway client fixes route, excludes credentials and rejects foreign pro
   await expect(adapter.search(query, new AbortController().signal)).rejects.toMatchObject({ state: 'rate-limited' });
   await expect(adapter.search(query, new AbortController().signal)).rejects.toMatchObject({ state: 'rate-limited' }); expect(fetcher).toHaveBeenCalledTimes(3);
 });
+
+it('catalog results prefer the edition cover and can retrieve a missing preview without fetching authors',async()=>{
+ const fetcher=vi.fn<typeof fetch>().mockImplementation(async input=>String(input).includes('/search.json')?new Response(JSON.stringify({docs:[{key:'/works/OL1W',cover_i:10,editions:{docs:[{key:'/books/OL1M',title:'ספר כריכה',cover_i:20}]}}]})):new Response(JSON.stringify({covers:[30],authors:[{key:'/authors/OL1A'}]})));
+ const adapter=openLibraryAdapter(fetcher),signal=new AbortController().signal;const rows=await adapter.search({...emptyQuery,title:'ספר כריכה'},signal);
+ expect(rows[0].coverUrl).toBe('https://covers.openlibrary.org/b/id/20-M.jpg?default=false');
+ await expect(adapter.previewCover!(rows[0],signal)).resolves.toBe('https://covers.openlibrary.org/b/id/30-M.jpg?default=false');
+ expect(fetcher).toHaveBeenCalledTimes(2);expect(String(fetcher.mock.calls[1][0])).toContain('/books/OL1M.json');
+ await expect(adapter.previewCover!({...rows[0],kind:'work',recordId:'/works/OL1W'},signal)).resolves.toBeUndefined();expect(fetcher).toHaveBeenCalledTimes(2);
+});

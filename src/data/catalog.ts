@@ -7,7 +7,7 @@ export interface CatalogQuery { title: string; author: string; publisher: string
 export const emptyQuery: CatalogQuery = { title: '', author: '', publisher: '', year: '', isbn: '', danacode: '' };
 export type ProviderState = 'success' | 'empty' | 'timeout' | 'error' | 'rate-limited' | 'unavailable' | 'cancelled';
 export interface ProviderResult { provider: Provider; state: ProviderState; candidates: Candidate[]; message: string; cached?: boolean }
-export interface CatalogAdapter { provider: Provider; search(query: CatalogQuery, signal: AbortSignal): Promise<Candidate[]>; resolve?(candidate: Candidate, signal: AbortSignal): Promise<Candidate> }
+export interface CatalogAdapter { provider: Provider; search(query: CatalogQuery, signal: AbortSignal): Promise<Candidate[]>; resolve?(candidate: Candidate, signal: AbortSignal): Promise<Candidate>; previewCover?(candidate: Candidate, signal: AbortSignal): Promise<string | undefined> }
 export class CatalogError extends Error { constructor(public state: ProviderState, public safeMessage: string, public retryAfterMilliseconds?: number) { super(safeMessage); } }
 export function retryAfterMs(headers: Headers): number {
   const retry = headers.get('Retry-After'), milliseconds = retry && /^\d+$/.test(retry) ? +retry * 1000 : retry ? Date.parse(retry) - Date.now() : 60000;
@@ -63,7 +63,7 @@ export function openLibraryAdapter(fetcher: typeof fetch = fetch): CatalogAdapte
   return { provider: 'openlibrary', async search(query, signal) {
     if (query.danacode) throw new CatalogError('unavailable', 'דאנאקוד דורש חיפוש ידני בקטלוג מורשה.');
     const q = query.isbn ? 'isbn:' + quote(query.isbn) : [['title', query.title], ['author', query.author], ['publisher', query.publisher], ['publish_year', query.year]].filter(([, value]) => value).map(([key, value]) => key + ':' + quote(value)).join(' AND ');
-    const params = new URLSearchParams({ q, limit: '10', lang: 'he', fields: 'key,title,author_name,editions,editions.key,editions.title,cover_i,subject' });
+    const params = new URLSearchParams({ q, limit: '10', lang: 'he', fields: 'key,title,author_name,editions,editions.key,editions.title,editions.cover_i,cover_i,subject' });
     const response = await request('/search.json?' + params, signal);
     if (!Array.isArray(response.docs)) throw new CatalogError('error', 'תגובת החיפוש אינה תקינה.');
     const candidates: Candidate[] = [];
@@ -75,9 +75,19 @@ export function openLibraryAdapter(fetcher: typeof fetch = fetch): CatalogAdapte
       const title = string(editionKey === key ? edition?.title : work.title), fields: FieldValues = {};
       if (title) fields.title = title;
       if (!editionKey || editionKey !== key) { const authors = stringList(work.author_name); if (authors.length) fields.authors = authors; }
-      candidates.push(validateCandidate({ provider: 'openlibrary', recordId: key, sourceUrl: 'https://openlibrary.org' + key, fetchedAt: new Date().toISOString(), kind: key.startsWith('/books/') ? 'edition' : 'work', fields, ...(Array.isArray(work.subject) ? { genres: stringList(work.subject).filter(name => name.length <= 120) } : {}), ...(typeof work.cover_i === 'number' && Number.isSafeInteger(work.cover_i) && work.cover_i > 0 && work.cover_i < 1e12 ? { coverUrl: `https://covers.openlibrary.org/b/id/${work.cover_i}-M.jpg?default=false` } : {}), warnings: [key.startsWith('/books/') ? 'פרטי המהדורה ייטענו אחרי בחירה.' : 'יצירה כללית: אינה מאמתת מהדורה או ISBN.'] }));
+      const coverId = [edition?.cover_i,work.cover_i].find(value => typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value < 1e12);
+      candidates.push(validateCandidate({ provider: 'openlibrary', recordId: key, sourceUrl: 'https://openlibrary.org' + key, fetchedAt: new Date().toISOString(), kind: key.startsWith('/books/') ? 'edition' : 'work', fields, ...(Array.isArray(work.subject) ? { genres: stringList(work.subject).filter(name => name.length <= 120) } : {}), ...(coverId ? { coverUrl: `https://covers.openlibrary.org/b/id/${coverId}-M.jpg?default=false` } : {}), warnings: [key.startsWith('/books/') ? 'פרטי המהדורה ייטענו אחרי בחירה.' : 'יצירה כללית: אינה מאמתת מהדורה או ISBN.'] }));
     }
     return candidates;
+  }, async previewCover(candidate, signal) {
+    validateCandidate(candidate);
+    if(candidate.provider !== 'openlibrary' || candidate.kind !== 'edition' || !/^\/books\/OL\d+M$/.test(candidate.recordId)) return undefined;
+    const row = await request(candidate.recordId + '.json', signal);
+    const cover = Array.isArray(row.covers) ? row.covers.find(value => typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value < 1e12) : undefined;
+    if(cover) return `https://covers.openlibrary.org/b/id/${cover}-M.jpg?default=false`;
+    const codes=[...stringList(row.isbn_13),...stringList(row.isbn_10)].flatMap(code=>{try{return [comparableISBN(parseISBN(code))];}catch{return [];}});
+    if(new Set(codes).size === 1 && codes[0]) return `https://covers.openlibrary.org/b/isbn/${codes[0]}-M.jpg?default=false`;
+    return undefined;
   }, async resolve(candidate, signal) {
     validateCandidate(candidate);
     if (candidate.provider !== 'openlibrary' || candidate.kind !== 'edition' || !/^\/books\/OL\d+M$/.test(candidate.recordId)) return candidate;

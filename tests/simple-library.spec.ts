@@ -283,3 +283,14 @@ test('existing books can fetch a missing cover by exact title/author',async({pag
  await page.getByRole('button',{name:'חיפוש כריכה',exact:true}).click();await expect(page.getByRole('dialog').getByRole('img',{name:'כריכת הספר',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'שמירת הספר',exact:true}).click();await expect(page.locator('.book-jacket img')).toBeVisible();
 });
+
+
+test('catalog results show covers before selecting even when only the edition record has a cover',async({page})=>{
+ await page.setViewportSize({width:360,height:800});await page.goto('');const png=await picture(page);let editionReads=0;
+ await page.route('https://openlibrary.org/**',route=>{const path=new URL(route.request().url()).pathname;if(path==='/search.json')return route.fulfill({json:{docs:[{key:'/works/OL66W',editions:{docs:[{key:'/books/OL66M',title:'כריכה בתוצאות'}]}},{key:'/works/OL67W',title:'ללא כריכה'}]}});editionReads++;return route.fulfill({json:{title:'כריכה בתוצאות',covers:[66],isbn_13:['9780140328721']}});});
+ await page.route('https://covers.openlibrary.org/**',route=>route.fulfill({contentType:'image/png',body:Buffer.from(png,'base64')}));
+ await page.getByRole('button',{name:'הוספת ספר',exact:true}).click();await page.getByText('מילוי אוטומטי מסריקה או תמונה',{exact:true}).click();await page.getByRole('dialog').locator('summary').filter({hasText:/^חיפוש ספר$/}).click();await page.getByLabel('שם ספר או ISBN',{exact:true}).fill('כריכה בתוצאות');await page.getByRole('button',{name:'חיפוש בקטלוגים',exact:true}).click();
+ await expect(page.getByRole('img',{name:'כריכת כריכה בתוצאות',exact:true})).toBeVisible();await page.locator('.candidate').filter({hasText:'ללא כריכה'}).scrollIntoViewIfNeeded();await expect(page.locator('.candidate').filter({hasText:'ללא כריכה'}).getByText('אין כריכה זמינה',{exact:true})).toBeVisible();expect(editionReads).toBe(1);await expect(page.getByRole('dialog').getByRole('img',{name:'כריכת הספר',exact:true})).toHaveCount(0);
+ await page.screenshot({path:'test-results/catalog-results-mobile.png',fullPage:true});await page.setViewportSize({width:1280,height:900});await page.screenshot({path:'test-results/catalog-results-desktop.png',fullPage:true});
+ await page.getByRole('button',{name:'בחירת מועמד כריכה בתוצאות',exact:true}).click();await expect(page.getByRole('dialog').getByRole('img',{name:'כריכת הספר',exact:true})).toBeVisible();
+});

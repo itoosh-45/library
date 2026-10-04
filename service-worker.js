@@ -7,10 +7,31 @@ const scope = new URL(self.registration.scope).pathname;
 const prefix = scope === '/library/' ? 'itoosh-library-shell-' : 'itoosh-library-path-shell-' + encodeURIComponent(scope) + '-';
 const cacheName = prefix + build;
 const paths = new Set(assets);
+
+async function stableResponse(request) {
+  let response = await fetch(request);
+  if (!response.ok) throw new Error('Failed to cache ' + request.url + ': ' + response.status);
+  if (!response.redirected) return response;
+
+  // Safari rejects a redirected Response when it is later served by a service worker.
+  // Re-fetch the final same-origin URL directly, then cache that non-redirected response
+  // under the original asset key. This touches only Cache Storage, never user data.
+  const finalUrl = new URL(response.url);
+  if (finalUrl.origin !== self.location.origin) throw new Error('Refusing redirected cross-origin cache entry: ' + finalUrl);
+  response = await fetch(new Request(finalUrl.href, { cache: 'reload', credentials: 'same-origin' }));
+  if (!response.ok || response.redirected) throw new Error('Redirect did not resolve to a stable response: ' + finalUrl);
+  return response;
+}
+
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(cacheName);
-    try { await cache.addAll(assets.map(url => new Request(url, { cache: 'reload' }))); }
+    try {
+      for (const url of assets) {
+        const request = new Request(url, { cache: 'reload' });
+        await cache.put(request, await stableResponse(request));
+      }
+    }
     catch (error) { await caches.delete(cacheName); throw error; }
   })());
 });

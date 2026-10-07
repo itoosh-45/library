@@ -5,11 +5,17 @@ test('simple production UI backs up/restores all tables and keeps books offline'
   await page.goto('./'); await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
   await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
   await page.getByLabel('שם הספר', { exact: true }).fill('ספר אופליין סינתטי');
-  await page.getByLabel('מחבר', { exact: true }).fill('מחבר בדיקה');
+  await page.getByLabel('שם פרטי של המחבר', { exact: true }).fill('מחבר');
+  await page.getByLabel('שם משפחה של המחבר', { exact: true }).fill('בדיקה');
+  await page.getByLabel('תאריך פרסום', { exact: true }).fill('2024-02-29');
+  await page.getByLabel('סוג כריכה', { exact: true }).fill('כריכה קשה');
   await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click(); await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('link', { name: 'הגדרות', exact: true }).click(); await page.getByText('גיבוי ושחזור הספרייה', { exact: true }).click();
   const downloading = page.waitForEvent('download'); await page.getByRole('button', { name: 'הורדת גיבוי הספרייה', exact: true }).click();
   const bytes = await readFile((await (await downloading).path())!); const original = JSON.parse(bytes.toString());
+  expect(original.formatVersion).toBe(11);
+  expect(original.tables.books[0]).toMatchObject({ publicationDate: '2024-02-29', publicationYear: 2024, binding: 'כריכה קשה' });
+  expect(original.tables.authors[0]).toMatchObject({ givenName: 'מחבר', familyName: 'בדיקה' });
   const other = await browser.newContext();
   try {
     const peer = await other.newPage(); await peer.goto('./#settings'); await peer.getByText('גיבוי ושחזור הספרייה', { exact: true }).click();

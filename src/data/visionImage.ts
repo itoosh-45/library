@@ -31,20 +31,20 @@ export async function loadVisionImage(file: File): Promise<VisionImageSource> {
     return { image, url, width: image.naturalWidth, height: image.naturalHeight, dispose };
   } catch (cause) { dispose(); throw cause; }
 }
-export async function prepareVisionImage(source: VisionImageSource, crop: ImageCrop = fullImage, rotation: 0 | 90 | 180 | 270 = 0): Promise<PreparedVisionImage> {
+export async function prepareVisionImage(source: VisionImageSource, crop: ImageCrop = fullImage, rotation: 0 | 90 | 180 | 270 = 0, localOcr = false): Promise<PreparedVisionImage> {
   validateCrop(crop); if (![0, 90, 180, 270].includes(rotation)) throw new LibraryValidationError('סיבוב התמונה אינו תקין.');
   const x = Math.round(crop[0] * source.width), y = Math.round(crop[1] * source.height), width = Math.max(1, Math.round((crop[2] - crop[0]) * source.width)), height = Math.max(1, Math.round((crop[3] - crop[1]) * source.height));
   const canvas = typeof OffscreenCanvas !== 'undefined' && typeof OffscreenCanvas.prototype.convertToBlob === 'function' ? new OffscreenCanvas(1, 1) : document.createElement('canvas'), quarterTurn = rotation === 90 || rotation === 270;
-  for (const longestEdge of [1200, 900, 600, 300]) {
+  for (const longestEdge of localOcr ? [2000, 1600, 1200, 900] : [1200, 900, 600, 300]) {
     const scale = Math.min(1, longestEdge / Math.max(width, height)), outputWidth = Math.max(1, Math.round(width * scale)), outputHeight = Math.max(1, Math.round(height * scale));
     canvas.width = quarterTurn ? outputHeight : outputWidth; canvas.height = quarterTurn ? outputWidth : outputHeight;
     const context = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null; if (!context) throw new LibraryValidationError('לא ניתן להכין את התמונה בדפדפן הזה.');
     context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height);
     if (rotation === 90) context.translate(canvas.width, 0); if (rotation === 180) context.translate(canvas.width, canvas.height); if (rotation === 270) context.translate(0, canvas.height);
     context.rotate(rotation * Math.PI / 180); context.drawImage(source.image, x, y, Math.min(width, source.width - x), Math.min(height, source.height - y), 0, 0, outputWidth, outputHeight);
-    for (const quality of [0.75, 0.65, 0.55]) {
+    for (const quality of localOcr ? [0.92, 0.85] : [0.75, 0.65, 0.55]) {
       const blob = await encodeJPEG(canvas, quality);
-      if (blob && blob.size <= 500 * 1024) return { blob, width: canvas.width, height: canvas.height };
+      if (blob && blob.size <= (localOcr ? 2 * 1024 * 1024 : 500 * 1024)) return { blob, width: canvas.width, height: canvas.height };
     }
   }
   throw new LibraryValidationError('הדפדפן לא הצליח להכין את התמונה לשליחה. נסה לבחור אותה מחדש.');

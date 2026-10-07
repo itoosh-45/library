@@ -46,3 +46,22 @@ button,input,select,textarea{font:inherit}select{border:1px solid #71878c;border
 .book-placeholder{background:linear-gradient(100deg,#bfd2c7 0%,#e5eee8 100%)!important;position:relative;color:transparent}.book-placeholder::before{content:"";position:absolute;inset-block:0;inset-inline-start:8%;width:1px;background:#92ab9e}.book-jacket .book-placeholder{background:linear-gradient(100deg,#bfd2c7,#e5eee8)!important}.settings-icon{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}.simple-header a{display:flex;align-items:center;gap:6px}.named-management ul{padding:0;list-style:none}.named-management li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #d6e1da}.named-management li span{min-width:0;overflow-wrap:anywhere}.named-management small,.user-statistics dd small{display:block;color:#526860;font-size:13px}.named-management button{flex-shrink:0}
 
 .catalog-results .candidate{display:grid;grid-template-columns:72px minmax(0,1fr);gap:14px;align-items:start;border-inline-start:0;border-bottom:1px solid #d6e1da;background:transparent;padding:14px 0;margin:0}.catalog-cover-preview{width:72px;min-height:108px;position:relative}.catalog-cover-preview .book-cover,.catalog-cover-preview .book-placeholder{display:block;width:72px;height:108px;object-fit:contain;border-radius:3px}.catalog-cover-preview small{position:absolute;inset:12px 5px;display:grid;place-items:center;text-align:center;font-size:12px;color:#205b49;line-height:1.5}.catalog-candidate-details{min-width:0}.catalog-candidate-details p{margin:6px 0;font-size:14px}.catalog-candidate-details button{margin-top:8px;max-width:100%;white-space:normal}
+
+/* Reference layout, within the existing green/Heebo identity. */
+.simple-nav{overflow-x:auto}.simple-nav a{white-space:nowrap;flex:1 0 auto}
+.series-fields{display:grid;grid-template-columns:minmax(0,3fr) minmax(80px,1fr);gap:0 12px}
+.series-fields>.quick-collection{grid-column:1/-1;grid-row:2}
+.split-author .field-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.book-save-actions{position:sticky;bottom:-20px;background:#fff;border-top:1px solid #d6e1da;padding:12px 0;margin-top:20px;z-index:2}
+.book-save-actions button{width:100%}
+.simple-settings>details{padding:0}.simple-settings>details>summary{display:list-item;padding:18px 8px;min-height:60px;font-size:18px;color:#205b49}
+.simple-settings>details[open]{padding-bottom:18px}.simple-settings>details[open]>summary{border-bottom:1px solid #d6e1da;margin-bottom:16px}
+.tag-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;list-style:none;padding:0}
+.tag-list button{display:flex;justify-content:space-between;gap:12px;width:100%;text-align:start;min-height:64px}.tag-list button[aria-pressed=true]{background:#e6f0e9}.tag-list span{font-size:14px}
+.shelf-tree.shelf-gallery{display:flex;flex-direction:column;gap:0}
+.shelf-gallery>li{position:relative;border-bottom:1px solid #d6e1da;padding:16px 0!important}
+.shelf-gallery .shelf-select{grid-template-columns:72px minmax(0,1fr);align-items:center;gap:8px 18px}
+.shelf-gallery .shelf-select .book-cover,.shelf-gallery .shelf-select .book-placeholder{grid-row:1/3;width:72px;height:108px;aspect-ratio:2/3;object-fit:contain}
+.shelf-gallery .shelf-info{font-size:20px}.shelf-gallery .shelf-count{grid-column:2;font-size:15px}
+.shelf-gallery .edit-collection{margin-inline-start:90px}
+@media(max-width:400px){.simple-nav a{font-size:14px;padding-inline:10px}.split-author .field-grid{gap:8px}.shelf-gallery .shelf-info{font-size:18px}}

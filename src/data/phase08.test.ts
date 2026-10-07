@@ -93,7 +93,7 @@ it('T19 v3 legacy keeps loans while restoring empty provenance', async () => {
 });
 it('T15 Google Books maps only edition fields, equivalent ISBNs and no description/rating/remote cover', () => {
   const rows = normalizeGoogleBooks({ items: [{ id: 'synthetic_1', volumeInfo: { title: 'מהדורה סינתטית', authors: ['מחבר'], publishedDate: '1988-10-01', pageCount: 144, description: 'excluded', averageRating: 4, imageLinks: { thumbnail: 'https://evil.test/track' }, industryIdentifiers: [{ type: 'ISBN_10', identifier: '0140328726' }, { type: 'ISBN_13', identifier: '9780140328721' }] } }] });
-  expect(rows[0].fields).toEqual({ title: 'מהדורה סינתטית', authors: ['מחבר'], publicationYear: 1988, pages: 144, isbn10: '0140328726', isbn13: '9780140328721' }); expect(rows[0].kind).toBe('volume'); expect(rows[0].warnings).toEqual([]); expect(normalizeGoogleBooks({ totalItems: 0 })).toEqual([]);
+  expect(rows[0].fields).toEqual({ title: 'מהדורה סינתטית', authors: ['מחבר'], publicationYear: 1988, publicationDate: '1988-10-01', pages: 144, isbn10: '0140328726', isbn13: '9780140328721' }); expect(rows[0].kind).toBe('volume'); expect(rows[0].warnings).toEqual([]); expect(normalizeGoogleBooks({ totalItems: 0 })).toEqual([]);
 });
 it('T15 gateway client fixes route, excludes credentials and rejects foreign provenance and raw failures', async () => {
   const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ candidates: [candidate()] })));

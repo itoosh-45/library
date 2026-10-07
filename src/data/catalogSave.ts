@@ -10,7 +10,7 @@ export function inputFieldValue(input: BookInput, field: MetadataField): FieldVa
   if (field === 'authors') return input.authors.map(name => name.trim()).filter(Boolean);
   if (field === 'isbn10' || field === 'isbn13') return input.isbn.replace(/[\s-]/g, '').toUpperCase() || null;
   if (field === 'publicationYear' || field === 'pages') return input[field].trim() ? +input[field] : null;
-  return input[field].trim() || null;
+  return input[field]?.trim() || null;
 }
 export function applyCatalogCandidate(input: BookInput, candidate: Candidate) {
   validateCandidate(candidate);
@@ -18,7 +18,7 @@ export function applyCatalogCandidate(input: BookInput, candidate: Candidate) {
   const draft = { ...input, ...(candidate.genres?.length ? { genreNames: [...candidate.genres] } : {}) };
   for (const field of fields) {
     const value = candidate.fields[field];
-    if (field === 'authors') draft.authors = [...value as string[]];
+    if (field === 'authors') { draft.authors = [...value as string[]]; delete draft.authorParts; }
     else if (field === 'isbn10' || field === 'isbn13') draft.isbn = String(value);
     else draft[field] = String(value);
   }

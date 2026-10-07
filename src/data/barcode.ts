@@ -19,7 +19,7 @@ export async function barcodeDecoder(): Promise<BarcodeDecoder> {
   const local = () => fallback ??= zxingDecoder();
   const Constructor = (globalThis as unknown as { BarcodeDetector?: NativeDetectorConstructor }).BarcodeDetector;
   if (Constructor) {
-    try { const formats = await Constructor.getSupportedFormats(); if (formats.includes('ean_13')) { const detector = new Constructor({ formats: ['ean_13', ...formats.filter(format => ['ean_8', 'code_128'].includes(format))] }); let failed = false; return async canvas => { if (!failed) { try { return (await detector.detect(canvas))[0]?.rawValue; } catch { failed = true; } } return (await local())(canvas); }; } } catch { /* Use local fallback if native initialization fails. */ }
+    try { const formats = (await Constructor.getSupportedFormats()).filter(format => ['ean_13', 'ean_8', 'code_128', 'code_39', 'code_93', 'itf', 'codabar', 'upc_a', 'upc_e'].includes(format)); if (formats.length) { const detector = new Constructor({ formats }); let failed = false; return async canvas => { if (!failed) { try { const value = (await detector.detect(canvas)).find(result => result.rawValue)?.rawValue; if (value) return value; } catch { failed = true; } } return (await local())(canvas); }; } } catch { /* Use local fallback if native initialization fails. */ }
   }
   return local();
 }
@@ -91,14 +91,21 @@ export class CameraScanner {
   private async constraint(value: ExtraConstraints) { const track = this.stream?.getVideoTracks()[0]; if (!track) throw new Error('camera-unavailable'); await track.applyConstraints({ advanced: [value] }); }
 }
 export async function decodeBarcodeFile(file: File, decoder: () => Promise<BarcodeDecoder> = barcodeDecoder): Promise<string | undefined> {
-  if (!/^image\/(jpeg|png|webp|heic|heif)$/.test(file.type) || file.size > 20 * 1024 * 1024) throw new LibraryValidationError('בחר תמונת JPEG, PNG או WebP עד 20MB. לתמונת HEIC שאינה נפתחת, המר ל־JPEG.');
+  if ((!/^image\//.test(file.type) && !(!file.type && /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name))) || !file.size || file.size > 20 * 1024 * 1024) throw new LibraryValidationError('בחר תמונה עד 20MB. לתמונת HEIC שאינה נפתחת, המר ל־JPEG.');
   const url = URL.createObjectURL(file), image = new Image();
   try {
     image.src = url; await image.decode();
-    const scale = Math.min(1, 2048 / Math.max(image.naturalWidth, image.naturalHeight)), canvas = document.createElement('canvas');
-    canvas.width = Math.round(image.naturalWidth * scale); canvas.height = Math.round(image.naturalHeight * scale);
-    const context = canvas.getContext('2d', { willReadFrequently: true }); if (!context) throw new Error(); context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    return await (await decoder())(canvas);
+    if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth * image.naturalHeight > 60000000) throw new Error('image-size');
+    const canvas = document.createElement('canvas'), decode = await decoder();
+    for (const [edge, fraction] of [[2048, 1], [3000, 1], [2048, 0.6]]) {
+      const width = image.naturalWidth * fraction, height = image.naturalHeight * fraction, scale = Math.min(1, edge / Math.max(width, height));
+      canvas.width = Math.max(1, Math.round(width * scale)); canvas.height = Math.max(1, Math.round(height * scale));
+      const context = canvas.getContext('2d', { willReadFrequently: true }); if (!context) throw new Error();
+      context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, (image.naturalWidth - width) / 2, (image.naturalHeight - height) / 2, width, height, 0, 0, canvas.width, canvas.height);
+      const value = await decode(canvas); if (value) return value;
+    }
+    return undefined;
   } catch { throw new LibraryValidationError('התמונה לא פוענחה. נסה צילום ברור ב־JPEG או הקלד את המזהה.'); }
   finally { URL.revokeObjectURL(url); image.src = ''; }
 }

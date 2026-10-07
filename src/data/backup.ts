@@ -6,12 +6,12 @@ import { parseISBN, readingStates } from './books';
 import { validDay } from './loans';
 import { validateMetadataSource } from './metadata';
 import { validateDraft } from './shelfDraft';
-import { fullEnvelope, legacyEnvelope, MAX_BACKUP_BYTES } from './backupFormat';
+import { fullEnvelope, legacyEnvelope, MAX_BACKUP_BYTES, hasExtendedBookDetails } from './backupFormat';
 
 export interface Core { books: Book[]; copies: Copy[]; authors: Author[]; settings: Setting[]; images: StoredImage[]; shelves: Shelf[]; bookShelves: BookShelf[]; series: Series[]; genres: NamedItem[]; tags: NamedItem[]; people: Person[]; loans: Loan[]; metadataSources: MetadataSource[]; recognitionDrafts: RecognitionDraft[] }
 type ImageJSON = Omit<StoredImage, 'blob'> & { base64: string };
 type Payload = Omit<Core, 'images'> & { images: ImageJSON[] };
-interface Backup { format: 'personal-library-basic'; version: 7; schemaVersion: 2; appVersion: string; libraryId: string; exportedAt: string; counts: Record<keyof Core, number>; checksum: string; data: Payload }
+interface Backup { format: 'personal-library-basic'; version: 7 | 8; schemaVersion: 2; appVersion: string; libraryId: string; exportedAt: string; counts: Record<keyof Core, number>; checksum: string; data: Payload }
 export interface Snapshot { text: string; fingerprint: string; counts: Backup['counts'] }
 export interface ValidatedBackup { data: Core; counts: Backup['counts']; libraryName: string }
 export const coreKeys = ['books', 'copies', 'authors', 'settings', 'images', 'shelves', 'bookShelves', 'series', 'genres', 'tags', 'people', 'loans', 'metadataSources', 'recognitionDrafts'] as const;
@@ -52,7 +52,7 @@ export async function envelope(core: Core): Promise<Backup> {
   if (estimated > MAX_BACKUP_BYTES) return bad('הגיבוי גדול מדי (עד 150 מגה־בייט). אין שינוי בספרייה.');
   const { images, ...tables } = core;
   const data: Payload = { ...tables, images: await Promise.all(images.map(async ({ blob, ...image }) => ({ ...image, base64: encode(new Uint8Array(await blob.arrayBuffer())) }))) };
-  return { format: 'personal-library-basic', version: 7, schemaVersion: 2, appVersion: '0.21.1', libraryId: core.settings.find(setting => setting.key === 'libraryId')!.value, exportedAt: new Date().toISOString(), counts: countsOf(core), checksum: await hashBytes(new TextEncoder().encode(JSON.stringify(data)).buffer), data };
+  return { format: 'personal-library-basic', version: hasExtendedBookDetails(core) ? 8 : 7, schemaVersion: 2, appVersion: '0.23.0', libraryId: core.settings.find(setting => setting.key === 'libraryId')!.value, exportedAt: new Date().toISOString(), counts: countsOf(core), checksum: await hashBytes(new TextEncoder().encode(JSON.stringify(data)).buffer), data };
 }
 export async function createSnapshot(database: LibraryDatabase, full = false): Promise<Snapshot> {
   const core = await database.transaction('r', database.tables, () => readCore(database));
@@ -71,7 +71,7 @@ export async function validateBackup(source: string): Promise<ValidatedBackup> {
   const version2 = root.version === 2 && root.schemaVersion === 2;
   const version3 = root.version === 3 && root.schemaVersion === 2;
   const version5 = [4, 5].includes(root.version as number) && root.schemaVersion === 2;
-  if (root.format !== 'personal-library-basic' || (!legacy && !version2 && !version3 && !version5 && (![6, 7].includes(root.version as number) || root.schemaVersion !== 2))) return bad('פורמט או גרסת הגיבוי אינם נתמכים. הספרייה לא שונתה.');
+  if (root.format !== 'personal-library-basic' || (!legacy && !version2 && !version3 && !version5 && (![6, 7, 8].includes(root.version as number) || root.schemaVersion !== 2))) return bad('פורמט או גרסת הגיבוי אינם נתמכים. הספרייה לא שונתה.');
   if (!text(root.appVersion, 100) || !uuid(root.libraryId) || !date(root.exportedAt) || !text(root.checksum, 64)) return bad();
   const keys = legacy ? legacyKeys : version2 ? version2Keys : version3 ? version3Keys : version5 ? version5Keys : [...coreKeys];
   const data = exact(root.data, keys);
@@ -130,7 +130,9 @@ export async function validateBackup(source: string): Promise<ValidatedBackup> {
   }
   const bookKeys = ['id', 'title', 'subtitle', 'authorIds', 'isbn10', 'isbn13', 'danacode', 'publisher', 'publicationYear', 'edition', 'volume', 'language', 'pages', 'seriesId', 'seriesNumber', 'genreIds', 'tagIds', 'readStatus', 'personalNotes', 'primaryImageId', 'createdAt', 'updatedAt', 'revision', 'titleSortKey'];
   for (const book of payload.books) {
-    exact(book, Object.hasOwn(book, 'rating') ? [...bookKeys, 'rating'] : bookKeys);
+    exact(book, [...bookKeys, ...['rating', 'publicationDate', 'binding'].filter(key => Object.hasOwn(book, key))]);
+    if (book.publicationDate !== undefined && book.publicationDate !== null && (!validDay(book.publicationDate) || book.publicationYear !== +book.publicationDate.slice(0, 4))) return bad();
+    if (book.binding !== undefined && book.binding !== null && !text(book.binding, 1000)) return bad();
     if (book.rating !== undefined && book.rating !== null && !integer(book.rating, 1, 5)) return bad();
     for (const key of ['title', 'subtitle', 'danacode', 'publisher', 'edition', 'volume', 'language', 'personalNotes'] as const) if (!nullable(book[key])) return bad();
     if (!strings(book.authorIds) || book.authorIds.some(id => !authorIds.has(id)) || !strings(book.genreIds) || book.genreIds.some(id => !genreIds.has(id)) || !strings(book.tagIds) || book.tagIds.some(id => !tagIds.has(id)) || (book.seriesId !== null && !seriesIds.has(book.seriesId)) || (book.seriesNumber !== null && (book.seriesId === null || typeof book.seriesNumber !== 'number' || !Number.isFinite(book.seriesNumber) || book.seriesNumber < 0 || book.seriesNumber > 1000000))) return bad();

@@ -21,7 +21,7 @@ test('phone: direct add, cover, title fallback, search, edit and shelf membershi
   await expect(page.getByLabel('שם הספר', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'הוספה ידנית', exact: true })).toHaveCount(0);
   await page.getByLabel('שם הספר', { exact: true }).fill('ספר עם כריכה');
-  await page.getByLabel('מחבר', { exact: true }).fill('מחבר בדיקה');
+  await page.getByLabel('שם פרטי של המחבר', { exact: true }).fill('מחבר בדיקה');
   await page.getByLabel('מדף', { exact: true }).selectOption({ label: 'מדף בדיקה' });
   await page.getByLabel('תמונת כריכה').setInputFiles({ name: 'synthetic.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
   await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click(); await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -53,10 +53,11 @@ test('simplified catalog: scanned identifier searches automatically and applies 
   });
   await page.route('https://covers.openlibrary.org/**', route => route.fulfill({ contentType: 'image/png', body: Buffer.from(png, 'base64') }));
   await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
-  await page.getByText('מילוי אוטומטי מסריקה או תמונה', { exact: true }).click();
-  await page.getByRole('button', { name: 'סריקת ברקוד או הקלדת מזהה', exact: true }).click();
+
+  await page.getByRole('button', { name: 'סריקת ברקוד', exact: true }).click();
+  await page.getByLabel('סוג המזהה', { exact: true }).selectOption('isbn');
   await page.getByLabel('מזהה שנקרא או הוקלד', { exact: true }).fill('9780140328721');
-  await page.getByRole('button', { name: 'שימוש במזהה ובדיקת הספר', exact: true }).click();
+  await page.getByRole('button', { name: 'חיפוש לפי המזהה', exact: true }).click();
   await page.getByRole('button', { name: 'בחירת מועמד ספר סריקה', exact: true }).click();
   await expect(page.getByLabel('שם הספר', { exact: true })).toHaveValue('ספר סריקה');
   await expect(page.getByRole('dialog').getByRole('img', { name: 'כריכת הספר' })).toBeVisible();
@@ -95,58 +96,47 @@ test('photo recognition uses all available details with one apply action and no 
   await page.getByRole('link', { name: 'כל הספרים', exact: true }).click();
   await page.route('https://generativelanguage.googleapis.com/**', route => route.fulfill({ json: { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ items: [{ title: 'ספר מתמונה', authors: ['מחבר מתמונה'], isbn: null, danacode: null, publisher: null, visibleText: 'ספר מתמונה מחבר מתמונה', evidenceByField: { title: ['ספר מתמונה'], authors: ['מחבר מתמונה'], isbn: [], danacode: [], publisher: [] }, imageIndex: 0, bbox: [0, 0, 1, 1], uncertaintyReasons: [] }] }) }] } }] } }));
   await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
-  await page.getByRole('button', { name: 'הוספה מתמונה · ספרים או ברקודים', exact: true }).click();
+  await page.getByRole('button', { name: 'סריקת תמונה', exact: true }).click();
   await page.getByLabel('בחירת תמונת ספר', { exact: true }).setInputFiles({ name: 'synthetic.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
-  await expect(page.getByRole('heading', { name: 'ספרים שזוהו (1)' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'פרטי הספר שזוהה' })).toBeVisible();
   await expect(page.getByLabel('גבול שמאל', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'הוספת 1 ספרים לספרייה', exact: true }).click();
+  await page.getByRole('button', { name: 'שימוש בפרטים ללא חיפוש', exact: true }).click();
+  await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'ספר מתמונה', exact: true })).toBeVisible();
 });
 
 
-test('multiple photos and barcode identifiers collect selectable results, fetch covers and preserve only chosen books', async ({ page }) => {
-  await page.setViewportSize({ width: 360, height: 800 });
-  await page.goto(''); const png = await picture(page);
-  await page.getByRole('link', { name: 'הגדרות', exact: true }).click(); await page.getByText('זיהוי ספר מתמונה · Gemini', { exact: true }).click();
+test('photo review edits both fields and searches only after explicit approval', async ({ page }) => {
+  await page.goto(''); const png = await picture(page); const searches: string[] = [];
+  await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
+  await page.getByText('זיהוי ספר מתמונה · Gemini', { exact: true }).click();
   await page.getByLabel('מפתח Gemini אישי', { exact: true }).fill('synthetic-key-without-live-provider');
   await page.getByLabel('בדקתי שהפרויקט של המפתח הוא Free, ללא חיוב פעיל', { exact: true }).check();
   await page.getByLabel('אני מסכים לשליחת התמונה המוכנה ל־Google Gemini', { exact: true }).check();
-  await page.getByRole('button', { name: 'שמירת מפתח Gemini', exact: true }).click(); await expect(page.getByText('מפתח אישי מוגדר בדפדפן הזה.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'שמירת מפתח Gemini', exact: true }).click();
+  await expect(page.getByText('מפתח אישי מוגדר בדפדפן הזה.', { exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'כל הספרים', exact: true }).click();
-  let requests = 0;
-  const item = (title: string | null, isbn: string | null = null) => ({ title, authors: [], isbn, danacode: null, publisher: null, visibleText: title || isbn, evidenceByField: { title: title ? [title] : [], authors: [], isbn: isbn ? [isbn] : [], danacode: [], publisher: [] }, imageIndex: 0, bbox: [0, 0, 1, 1], uncertaintyReasons: [] });
-  await page.route('https://generativelanguage.googleapis.com/**', route => {
-    const body = JSON.parse(route.request().postData()!); expect(body.generationConfig.responseJsonSchema.properties.items.maxItems).toBe(40);
-    requests++; const items = requests === 1 ? [item(null, '9780306406157'), item('לא להוסיף')] : [item('ספר מהתמונה השנייה'), item(null, '9780306406157')];
-    return route.fulfill({ json: { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ items }) }] } }] } });
-  });
-  await page.route('https://openlibrary.org/**', route => route.fulfill({ json: new URL(route.request().url()).pathname === '/search.json' ? { docs: [{ key: '/works/OL88W', cover_i: 88, editions: { docs: [{ key: '/books/OL88M', title: 'ספר הברקוד' }] } }] } : { title: 'ספר הברקוד', isbn_13: ['9780306406157'], publishers: ['הוצאה'], subjects: ['פנטזיה', 'הרפתקאות'], languages: [{ key: '/languages/heb' }], number_of_pages: 123, publish_date: '2022', edition_name: 'מהדורה שנייה' } }));
-  await page.route('https://covers.openlibrary.org/**', route => route.fulfill({ contentType: 'image/png', body: Buffer.from(png, 'base64') }));
-  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה מתמונה · ספרים או ברקודים', exact: true }).click();
-  await page.getByLabel('בחירת תמונת ספר', { exact: true }).setInputFiles(['first.png', 'second.png'].map(name => ({ name, mimeType: 'image/png', buffer: Buffer.from(png, 'base64') })));
-  await expect(page.getByRole('heading', { name: 'ספרים שזוהו (4)' })).toBeVisible({timeout:15000});
-  await expect(page.getByRole('button', { name: 'הוספת 3 ספרים לספרייה', exact: true })).toBeEnabled(); expect(requests).toBe(2);
-  await page.getByRole('checkbox', { name: 'הוספת לא להוסיף', exact: true }).uncheck();
-  await page.locator('.image-book-results > li > details > summary').filter({ hasText: 'ספר מהתמונה השנייה' }).click();
-  await page.getByRole('dialog', { name: 'הוספה מתמונה', exact: true }).getByLabel('שם הספר', { exact: true }).filter({ visible: true }).fill('ספר מתוקן');
-  await page.screenshot({ path: 'test-results/image-books-mobile.png', fullPage: true });
-  await page.setViewportSize({ width: 1280, height: 900 }); await page.screenshot({ path: 'test-results/image-books-desktop.png', fullPage: true });
-  await page.getByRole('button', { name: 'הוספת 2 ספרים לספרייה', exact: true }).click(); await expect(page.getByRole('dialog')).toHaveCount(0);
-  const stored = await page.evaluate(async () => { const path = '/library/src/data/database.ts'; const { db } = await import(path); return { books: await db.books.toArray(), genres: await db.genres.toArray(), images: (await db.images.toArray()).map((image: { byteLength: number; width: number; height: number }) => ({ bytes: image.byteLength, width: image.width, height: image.height })) }; });
-  expect(stored.books.map((book: { title: string }) => book.title).sort()).toEqual(['ספר הברקוד', 'ספר מתוקן']);
-  expect(stored.books.find((book: { title: string }) => book.title === 'ספר הברקוד')).toMatchObject({ language: 'heb', publisher: 'הוצאה', pages: 123, publicationYear: 2022, edition: 'מהדורה שנייה' });
-  expect(stored.genres.map((genre: { name: string }) => genre.name).sort()).toEqual(['הרפתקאות', 'פנטזיה']);
-  expect(stored.images).toHaveLength(1); expect(stored.images[0].bytes).toBeLessThanOrEqual(1024 * 1024); expect(Math.max(stored.images[0].width, stored.images[0].height)).toBeLessThanOrEqual(1200);
-  await page.getByRole('link', { name: 'מדפים', exact: true }).click(); await page.getByRole('button', { name: 'הוספת מדף', exact: true }).click();
-  await page.getByLabel('שם המדף', { exact: true }).fill('מדף בתמונה'); await page.getByLabel('תמונת מדף', { exact: true }).setInputFiles({ name: 'shelf.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
-  await page.getByRole('button', { name: 'שמירת המדף', exact: true }).click(); await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.setViewportSize({ width: 360, height: 800 });
-  const image = page.getByRole('img', { name: 'תמונת המדף מדף בתמונה', exact: true }); await expect(image).toBeVisible(); const bounds = (await image.boundingBox())!; expect(bounds.width).toBeGreaterThan(90); expect(bounds.width).toBeLessThan(115); expect(bounds.height / bounds.width).toBeCloseTo(1.5, 1);
-  await page.screenshot({ path: 'test-results/shelves-mobile.png', fullPage: true });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-});
 
+  await page.route('https://openlibrary.org/**', route => { searches.push(route.request().url()); return route.fulfill({ json: { docs: [] } }); });
+  await page.evaluate(async () => {
+    const vp='/library/src/data/vision.ts'; const { personalVisionSession }=await import(vp);
+    personalVisionSession.recognize=async()=>({ model:'tesseract-layout-v1', usedBackup:false, result:{items:[{title:'שם שזוהה',authors:['מחבר שזוהה'],isbn:null,danacode:null,publisher:null,visibleText:'שם שזוהה מחבר שזוהה',evidenceByField:{title:['שם שזוהה'],authors:['מחבר שזוהה'],isbn:[],danacode:[],publisher:[]},imageIndex:0,bbox:null,uncertaintyReasons:[]}]}});
+  });
+  await page.evaluate(async()=>{const dp='/library/src/data/database.ts',bp='/library/src/data/books.ts';const {db}=await import(dp),{saveBook,emptyInput}=await import(bp);await saveBook(db,{...emptyInput,title:'ספר קיים לבדיקה',isbn:'9780140328721'});});
+  await page.getByRole('button',{name:/ספר קיים לבדיקה ללא מחבר/}).click();
+  for(const name of ['סריקת תמונה','סריקת ברקוד','חיפוש']) await expect(page.getByRole('button',{name,exact:true})).toHaveCount(1);
+  await page.getByRole('button',{name:'סריקת תמונה',exact:true}).click();
+  await page.getByLabel('בחירת תמונת ספר',{exact:true}).setInputFiles({name:'synthetic.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
+  await expect(page.getByLabel('שם הספר שזוהה',{exact:true})).toHaveValue('שם שזוהה'); expect(searches).toEqual([]);
+  await page.getByLabel('שם הספר שזוהה',{exact:true}).fill('שם מתוקן');await page.getByLabel('מחבר שזוהה',{exact:true}).fill('מחבר מתוקן');
+  await page.getByRole('button',{name:'חפש לפי הפרטים',exact:true}).click();
+  await expect.poll(()=>searches.length).toBe(1); const url=new URL(searches[0]);expect(url.searchParams.get('q')).toBe('title:"שם מתוקן" AND author:"מחבר מתוקן"');
+  await expect(page.getByLabel('שם הספר',{exact:true})).toHaveValue('שם מתוקן');await expect(page.getByLabel('שם פרטי של המחבר',{exact:true})).toHaveValue('מחבר מתוקן');
+  await page.getByRole('button',{name:'שמירת הספר',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('heading',{name:'שם מתוקן',exact:true})).toBeVisible();
+  const source=await page.evaluate(async()=>{const dp='/library/src/data/database.ts';const {db}=await import(dp);return (await db.metadataSources.toArray())[0];});expect(source).toMatchObject({provider:'ocr',userOverriddenFields:['title','authors']});
+});
 
 test('stars at the top of a book save, reload, change and clear by touch', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 800 }); await page.goto('');
@@ -167,7 +157,7 @@ test('stars at the top of a book save, reload, change and clear by touch', async
 test('loans with days and edited due dates, 1/3 badges, price/genre/rating filters and user statistics', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 800 }); await page.goto('');
   await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
-  await page.getByLabel('שם הספר', { exact: true }).fill('אלף ספר'); await page.getByLabel('מחיר הספר בש״ח', { exact: true }).fill('45.50');
+  await page.getByLabel('שם הספר', { exact: true }).fill('אלף ספר'); await page.getByText('פרטים נוספים',{exact:true}).click(); await page.getByLabel('מחיר הספר בש״ח', { exact: true }).fill('45.50');
   await page.getByLabel('ז׳אנרים', { exact: true }).fill('פנטזיה, הרפתקאות'); await page.getByRole('button', { name: 'דירוג 4 מתוך 5', exact: true }).click();
   await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click(); await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.evaluate(async () => {
@@ -180,7 +170,7 @@ test('loans with days and edited due dates, 1/3 badges, price/genre/rating filte
   });
   await expect(page.locator('.book-info h2')).toHaveText(['אלף ספר', 'בית ספר']);
   await page.getByRole('button', { name: /אלף ספר ללא מחבר/ }).click();
-  await expect(page.getByLabel('מחיר הספר בש״ח', { exact: true })).toHaveValue('45.5');
+  await page.getByText('פרטים נוספים',{exact:true}).click(); await expect(page.getByLabel('מחיר הספר בש״ח', { exact: true })).toHaveValue('45.5');
   await page.getByText('השאלת עותק', { exact: true }).click(); await page.getByLabel('עותק להשאלה', { exact: true }).selectOption({ index: 1 });
   await page.getByLabel('שם האדם להשאלה', { exact: true }).fill('אדם סינתטי');
   await page.getByLabel('מספר ימי השאלה', { exact: true }).fill('7');
@@ -224,10 +214,10 @@ test('settings: shelf/spending statistics, gradient placeholders, genre protecti
   await page.getByText('מחיקת האוסף',{exact:true}).click(); await page.getByLabel('אני מאשר הסרת האוסף והשיוכים אליו',{exact:true}).check();
   await page.getByRole('button',{name:'מחיקת האוסף בלבד',exact:true}).click(); await expect(page.getByRole('alert').filter({hasText:'הז׳אנר משויך לספרים'})).toBeVisible();
   await page.getByRole('button',{name:'סגירה',exact:true}).click();
-  await page.getByText('ניהול תגיות',{exact:true}).click(); await page.getByRole('button',{name:'עריכת תגית תגית בדיקה',exact:true}).click();
+  await page.getByRole('link',{name:'תגיות',exact:true}).click(); await page.getByText('ניהול תגיות',{exact:true}).click(); await page.getByRole('button',{name:'עריכת תגית תגית בדיקה',exact:true}).click();
   await page.getByText('מחיקת האוסף',{exact:true}).click(); await page.getByLabel('אני מאשר הסרת האוסף והשיוכים אליו',{exact:true}).check(); await page.getByRole('button',{name:'מחיקת האוסף בלבד',exact:true}).click(); await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button',{name:'הוספת תגית',exact:true}).click(); await page.getByLabel('שם האוסף',{exact:true}).fill('תגית חדשה'); await page.getByRole('button',{name:'שמירת האוסף',exact:true}).click(); await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.getByText('Excel · ייצוא וייבוא',{exact:true}).click(); await page.getByRole('button',{name:'פתיחת כלי Excel',exact:true}).click();
+  await page.getByRole('link',{name:'הגדרות',exact:true}).click(); await page.getByText('Excel · ייצוא וייבוא',{exact:true}).click(); await page.getByRole('button',{name:'פתיחת כלי Excel',exact:true}).click();
   const downloading = page.waitForEvent('download'); await page.getByRole('button',{name:'יצוא הספרייה ל־Excel',exact:true}).click(); const file = await downloading, bytes = await readFile((await file.path())!);
   const workbook = XLSX.read(bytes,{type:'buffer'}), rows = XLSX.utils.sheet_to_json<Record<string,unknown>>(workbook.Sheets.Books);
   expect(workbook.SheetNames[0]).toBe('Books'); expect(rows[0]).toMatchObject({title:'ספר Excel',rating:4,shelfNames:'מדף Excel',priceILS:45.5});
@@ -243,7 +233,7 @@ test('settings: shelf/spending statistics, gradient placeholders, genre protecti
     await other.getByLabel('שמרתי את הגיבוי ואני מאשר את ייבוא Excel',{exact:true}).check();
     await other.getByRole('button',{name:'אישור ושמירת ייבוא Excel',exact:true}).click(); await expect(other.getByText('ייבוא Excel הושלם בהצלחה.',{exact:true})).toBeVisible();
     await other.getByRole('link',{name:'כל הספרים',exact:true}).click(); await expect(other.getByRole('heading',{name:'ספר Excel',exact:true})).toBeVisible();
-    await other.getByRole('button',{name:/ספר Excel ללא מחבר/}).click(); await expect(other.getByRole('button',{name:'דירוג 4 מתוך 5',exact:true})).toHaveAttribute('aria-pressed','true'); await expect(other.getByLabel('מחיר הספר בש״ח',{exact:true})).toHaveValue('45.5'); await expect(other.getByLabel('מדף',{exact:true})).toContainText('מדף Excel');
+    await other.getByRole('button',{name:/ספר Excel ללא מחבר/}).click(); await expect(other.getByRole('button',{name:'דירוג 4 מתוך 5',exact:true})).toHaveAttribute('aria-pressed','true'); await other.getByText('פרטים נוספים',{exact:true}).click(); await expect(other.getByLabel('מחיר הספר בש״ח',{exact:true})).toHaveValue('45.5'); await expect(other.getByLabel('מדף',{exact:true})).toContainText('מדף Excel');
   } finally { await otherContext.close(); }
 });
 
@@ -260,18 +250,18 @@ test('local OCR reads a real cover without cloud requests and saves visible evid
   test.setTimeout(120000); await page.route('https://openlibrary.org/**',route=>route.fulfill({json:{docs:[]}}));
   const cloud: string[]=[]; await page.route(/https:\/\/(?:generativelanguage.googleapis.com|api.groq.com)\//, route=>{cloud.push(route.request().url());return route.abort();});
   await page.goto(''); await page.setViewportSize({width:360,height:800});
-  const png=await page.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=900;canvas.height=1200;const ctx=canvas.getContext('2d')!;ctx.fillStyle='#fff';ctx.fillRect(0,0,900,1200);ctx.fillStyle='#111';ctx.font='bold 76px Arial';ctx.fillText('THE LIBRARY',125,350);ctx.font='36px Arial';ctx.fillText('by JOHN SMITH',250,445);return canvas.toDataURL('image/png').split(',')[1];});
-  await page.getByRole('button',{name:'הוספת ספר',exact:true}).click();await page.getByRole('button',{name:'הוספה מתמונה · ספרים או ברקודים',exact:true}).click();
+  const png=await page.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=900;canvas.height=1200;const ctx=canvas.getContext('2d')!;ctx.fillStyle='#fff';ctx.fillRect(0,0,900,1200);ctx.fillStyle='#111';ctx.textAlign='right';ctx.font='bold 76px Arial';ctx.fillText('ספר לדוגמה',800,350);ctx.font='40px Arial';ctx.fillText('מאת מחבר בדיקה',750,900);return canvas.toDataURL('image/png').split(',')[1];});
+  await page.getByRole('button',{name:'הוספת ספר',exact:true}).click();await page.getByRole('button',{name:'סריקת תמונה',exact:true}).click();
   await expect(page.getByLabel('דרך הזיהוי',{exact:true})).toHaveValue('local');
   await page.getByLabel('בחירת תמונת ספר',{exact:true}).setInputFiles({name:'SYNTHETIC-OCR.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
-  await expect(page.getByRole('heading',{name:'ספרים שזוהו (1)',exact:true})).toBeVisible({timeout:95000});
-  await expect(page.locator('.image-book-results > li > details > summary')).toContainText('THE LIBRARY');
-  await page.locator('.image-book-results > li > details > summary').click();await expect(page.locator('.image-book-results').getByLabel('מחבר',{exact:true})).toHaveValue('JOHN SMITH');
+  await expect(page.getByRole('heading',{name:'פרטי הספר שזוהה',exact:true})).toBeVisible({timeout:95000});
+  await expect(page.getByLabel('שם הספר שזוהה',{exact:true})).toHaveValue('ספר לדוגמה');
+  await expect(page.getByLabel('מחבר שזוהה',{exact:true})).toHaveValue('מחבר בדיקה');
   await page.screenshot({path:'test-results/ocr-mobile.png',fullPage:true});
-  await page.getByRole('button',{name:'הוספת 1 ספרים לספרייה',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'THE LIBRARY',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'שימוש בפרטים ללא חיפוש',exact:true}).click();await page.getByRole('button',{name:'שמירת הספר',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'ספר לדוגמה',exact:true})).toBeVisible();
   const source=await page.evaluate(async()=>{const path='/library/src/data/database.ts';const {db}=await import(/* @vite-ignore */ path);return (await db.metadataSources.toArray())[0];});
-  expect(source.provider).toBe('ocr');expect(source.recognition.item.evidenceByField.title).toContain('THE LIBRARY');expect(cloud).toEqual([]);
+  expect(source.provider).toBe('ocr');expect(source.recognition.item.evidenceByField.title).toContain('ספר לדוגמה');expect(cloud).toEqual([]);
 });
 
 
@@ -279,7 +269,7 @@ test('existing books can fetch a missing cover by exact title/author',async({pag
  await page.goto('');const png=await picture(page);
  await page.route('https://openlibrary.org/**',route=>route.fulfill({json:{docs:[{key:'/works/OL77W',title:'ספר הכריכה',author_name:['מחבר הכריכה'],cover_i:77}]}}));
  await page.route('https://covers.openlibrary.org/**',route=>route.fulfill({contentType:'image/png',body:Buffer.from(png,'base64')}));
- await page.getByRole('button',{name:'הוספת ספר',exact:true}).click();await page.getByLabel('שם הספר',{exact:true}).fill('ספר הכריכה');await page.getByLabel('מחבר',{exact:true}).fill('מחבר הכריכה');
+ await page.getByRole('button',{name:'הוספת ספר',exact:true}).click();await page.getByLabel('שם הספר',{exact:true}).fill('ספר הכריכה');await page.getByLabel('שם פרטי של המחבר',{exact:true}).fill('מחבר הכריכה');
  await page.getByRole('button',{name:'חיפוש כריכה',exact:true}).click();await expect(page.getByRole('dialog').getByRole('img',{name:'כריכת הספר',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'שמירת הספר',exact:true}).click();await expect(page.locator('.book-jacket img')).toBeVisible();
 });
@@ -289,7 +279,7 @@ test('catalog results show covers before selecting even when only the edition re
  await page.setViewportSize({width:360,height:800});await page.goto('');const png=await picture(page);let editionReads=0;
  await page.route('https://openlibrary.org/**',route=>{const path=new URL(route.request().url()).pathname;if(path==='/search.json')return route.fulfill({json:{docs:[{key:'/works/OL66W',editions:{docs:[{key:'/books/OL66M',title:'כריכה בתוצאות'}]}},{key:'/works/OL67W',title:'ללא כריכה'}]}});editionReads++;return route.fulfill({json:{title:'כריכה בתוצאות',covers:[66],isbn_13:['9780140328721']}});});
  await page.route('https://covers.openlibrary.org/**',route=>route.fulfill({contentType:'image/png',body:Buffer.from(png,'base64')}));
- await page.getByRole('button',{name:'הוספת ספר',exact:true}).click();await page.getByText('מילוי אוטומטי מסריקה או תמונה',{exact:true}).click();await page.getByRole('dialog').locator('summary').filter({hasText:/^חיפוש ספר$/}).click();await page.getByLabel('שם ספר או ISBN',{exact:true}).fill('כריכה בתוצאות');await page.getByRole('button',{name:'חיפוש בקטלוגים',exact:true}).click();
+ await page.getByRole('button',{name:'הוספת ספר',exact:true}).click();await page.getByRole('button',{name:'חיפוש',exact:true}).click();await page.getByLabel('שם ספר, דאנאקוד או ISBN',{exact:true}).fill('כריכה בתוצאות');await page.getByRole('button',{name:'חיפוש בקטלוגים',exact:true}).click();
  await expect(page.getByRole('img',{name:'כריכת כריכה בתוצאות',exact:true})).toBeVisible();await page.locator('.candidate').filter({hasText:'ללא כריכה'}).scrollIntoViewIfNeeded();await expect(page.locator('.candidate').filter({hasText:'ללא כריכה'}).getByText('אין כריכה זמינה',{exact:true})).toBeVisible();expect(editionReads).toBe(1);await expect(page.getByRole('dialog').getByRole('img',{name:'כריכת הספר',exact:true})).toHaveCount(0);
  await page.screenshot({path:'test-results/catalog-results-mobile.png',fullPage:true});await page.setViewportSize({width:1280,height:900});await page.screenshot({path:'test-results/catalog-results-desktop.png',fullPage:true});
  await page.getByRole('button',{name:'בחירת מועמד כריכה בתוצאות',exact:true}).click();await expect(page.getByRole('dialog').getByRole('img',{name:'כריכת הספר',exact:true})).toBeVisible();

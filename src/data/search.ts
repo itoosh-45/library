@@ -1,4 +1,4 @@
-import type { Author, Book, BookShelf, Copy, Loan, NamedItem, Shelf } from './models';
+import type { Author, Book, BookShelf, Copy, Loan, NamedItem, Shelf, Series } from './models';
 import { shelfBookIds } from './collections';
 
 export const hebrewCollator = new Intl.Collator('he', { numeric: true, sensitivity: 'base' });
@@ -16,9 +16,10 @@ export interface LibraryFilters {
   readStatus: string; availability: string; publisher: string; language: string; year: string;
 }
 export const emptyFilters: LibraryFilters = { query: '', shelfId: '', descendants: true, genreId: '', tagIds: [], readStatus: '', availability: '', publisher: '', language: '', year: '' };
-export interface SearchData { books: Book[]; authors: Author[]; copies: Copy[]; tags: NamedItem[]; genres: NamedItem[]; shelves: Shelf[]; bookShelves: BookShelf[]; loans: Loan[] }
+export interface SearchData { books: Book[]; authors: Author[]; copies: Copy[]; tags: NamedItem[]; genres: NamedItem[]; shelves: Shelf[]; bookShelves: BookShelf[]; loans: Loan[]; series?: Series[] }
 export function filterBooks(data: SearchData, filters: LibraryFilters, showArchived = false): Book[] {
   const authors = new Map(data.authors.map(item => [item.id, normalizeSearch(item.displayName)]));
+  const series = new Map((data.series ?? []).map(item => [item.id, normalizeSearch(item.name)]));
   const tags = new Map(data.tags.map(item => [item.id, normalizeSearch(item.name)]));
   const active = new Set<string>(), available = new Set<string>();
   const borrowed = new Set(data.loans.filter(loan => loan.openFlag === 1).map(loan => loan.copyId));
@@ -36,7 +37,7 @@ export function filterBooks(data: SearchData, filters: LibraryFilters, showArchi
     if (filters.language && book.language !== filters.language) return false;
     if (filters.year && String(book.publicationYear) !== filters.year) return false;
     if (!terms.length) return true;
-    const fields = [normalizeSearch(book.title ?? ''), ...book.authorIds.map(id => authors.get(id) ?? ''), ...book.tagIds.map(id => tags.get(id) ?? ''), book.isbn13 ?? '', book.isbn10 ?? ''];
+    const fields = [normalizeSearch(book.title ?? ''), series.get(book.seriesId ?? '') ?? '', ...book.authorIds.map(id => authors.get(id) ?? ''), ...book.tagIds.map(id => tags.get(id) ?? ''), book.isbn13 ?? '', book.isbn10 ?? ''];
     return terms.every(term => fields.some(field => field.includes(term)));
   });
 }

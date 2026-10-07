@@ -1,3 +1,4 @@
+import { validDay } from './loans';
 import type { LibraryDatabase } from './database';
 import { comparableISBN, parseISBN } from './books';
 import { LibraryValidationError } from './library';
@@ -95,6 +96,8 @@ export function openLibraryAdapter(fetcher: typeof fetch = fetch): CatalogAdapte
     for (const key of ['title', 'subtitle', 'edition', 'volume'] as const) { const value = string(row[key === 'edition' ? 'edition_name' : key]); if (value) fields[key] = value; }
     const publishers = stringList(row.publishers); if (publishers.length === 1) fields.publisher = publishers[0]; else if (publishers.length > 1) warnings.push('כמה הוצאות: השדה נשאר לבחירה ידנית.');
     const date = string(row.publish_date); if (date && /^\d{4}(-\d{2}(-\d{2})?)?$/.test(date) && +date.slice(0, 4) >= 1000) fields.publicationYear = +date.slice(0, 4);
+    if (date && validDay(date)) fields.publicationDate = date;
+    const binding = string(row.physical_format); if (binding) fields.binding = binding;
     else if (date) warnings.push('תאריך הפרסום אינו שנה חד־משמעית.');
     const pages = number(row.number_of_pages, 100000); if (pages) fields.pages = pages;
     const isbns = [...stringList(row.isbn_13), ...stringList(row.isbn_10)].flatMap(code => { try { const isbn = parseISBN(code); return [isbn.isbn13 ?? isbn.isbn10!]; } catch { warnings.push('ISBN לא תקין הושמט.'); return []; } });

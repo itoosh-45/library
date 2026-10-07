@@ -38,10 +38,10 @@ test('Groq key is remembered separately and Gemini failures use mocked Groq auto
   await expect(page.getByText('מפתח Groq אישי מוגדר בדפדפן הזה.',{exact:true})).toBeVisible();expect(calls).toEqual([]);
   await page.reload();await page.getByText('Groq · גיבוי לזיהוי תמונות',{exact:true}).click();await expect(page.getByText('מפתח Groq אישי מוגדר בדפדפן הזה.',{exact:true})).toBeVisible();
   await page.getByRole('link',{name:'כל הספרים',exact:true}).click();const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=240;c.height=360;c.getContext('2d')!.fillRect(0,0,240,360);return c.toDataURL('image/png').split(',')[1];});
-  await page.getByRole('button',{name:'הוספת ספר',exact:true}).click();await page.getByRole('button',{name:'הוספה מתמונה · ספרים או ברקודים',exact:true}).click();
+  await page.getByRole('button',{name:'הוספת ספר',exact:true}).click();await page.getByRole('button',{name:'סריקת תמונה',exact:true}).click();
   await page.route('https://covers.openlibrary.org/**',route=>route.fulfill({contentType:'image/png',body:Buffer.from(png,'base64')}));
   await page.getByLabel('בחירת תמונת ספר',{exact:true}).setInputFiles({name:'SYNTHETIC.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
-  await expect(page.getByRole('heading',{name:'ספרים שזוהו (1)',exact:true})).toBeVisible();expect(calls).toEqual(['gemini','groq']);
-  await page.getByRole('button',{name:'הוספת 1 ספרים לספרייה',exact:true}).click();await expect(page.getByRole('heading',{name:'ספר גיבוי Groq',exact:true})).toBeVisible();await expect(page.locator('.book-jacket img')).toBeVisible();
+  await expect(page.getByRole('heading',{name:'פרטי הספר שזוהה',exact:true})).toBeVisible();expect(calls).toEqual(['gemini','groq']);
+  await page.getByRole('button',{name:'שימוש בפרטים ללא חיפוש',exact:true}).click();await page.getByRole('button',{name:'חיפוש כריכה',exact:true}).click();await expect(page.getByRole('dialog').getByRole('img',{name:'כריכת הספר',exact:true})).toBeVisible();await page.getByRole('button',{name:'שמירת הספר',exact:true}).click();await expect(page.getByRole('heading',{name:'ספר גיבוי Groq',exact:true})).toBeVisible();await expect(page.locator('.book-jacket img')).toBeVisible();
   await page.getByRole('link',{name:'הגדרות',exact:true}).click();await page.getByText('Groq · גיבוי לזיהוי תמונות',{exact:true}).click();await page.getByRole('button',{name:'מחיקת מפתח Groq מהמכשיר',exact:true}).click();await page.reload();await page.getByText('Groq · גיבוי לזיהוי תמונות',{exact:true}).click();await expect(page.getByLabel('מפתח Groq אישי',{exact:true})).toHaveValue('');
 });

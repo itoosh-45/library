@@ -1,3 +1,4 @@
+import { validDay } from './loans';
 import { safeCatalogCoverUrl } from './catalogCoverUrl';
 import { parseISBN, comparableISBN } from './books';
 import { CatalogError, readCatalogJson, retryAfterMs, type CatalogAdapter, type CatalogQuery } from './catalog';
@@ -14,6 +15,7 @@ export function normalizeGoogleBooks(value: unknown): Candidate[] {
     const row = object(item.volumeInfo), fields: FieldValues = {}, warnings: string[] = [];
     for (const key of ['title', 'subtitle', 'publisher', 'language'] as const) { const value = text(row[key]); if (value) fields[key] = value; }
     const date = text(row.publishedDate); if (date && /^\d{4}(-\d{2}(-\d{2})?)?$/.test(date) && +date.slice(0, 4) >= 1000) fields.publicationYear = +date.slice(0, 4);
+    if (date && validDay(date)) fields.publicationDate = date;
     if (typeof row.pageCount === 'number' && Number.isInteger(row.pageCount) && row.pageCount > 0 && row.pageCount <= 100000) fields.pages = row.pageCount;
     if (Array.isArray(row.authors)) { const authors = row.authors.slice(0, 20).map(text).filter((item): item is string => !!item); if (authors.length) fields.authors = authors; }
     const codes = Array.isArray(row.industryIdentifiers) ? row.industryIdentifiers.slice(0, 10).flatMap(item => { const row = object(item); if (!['ISBN_10', 'ISBN_13'].includes(row.type as string) || typeof row.identifier !== 'string') return []; try { const isbn = parseISBN(row.identifier); return [isbn.isbn13 ?? isbn.isbn10!]; } catch { warnings.push('ISBN לא תקין הושמט.'); return []; } }) : [];

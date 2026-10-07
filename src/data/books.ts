@@ -2,6 +2,7 @@ import type { LibraryDatabase } from './database';
 import type { Book, Copy, ReadStatus, StoredImage } from './models';
 import { createBookWithCopy, LibraryValidationError, normalizeText } from './library';
 import { removeUnusedImage, saveNamedItem } from './collections';
+import { validDay } from './loans';
 
 export const readingStates: Record<ReadStatus, string> = { unread: 'טרם נקרא', reading: 'בקריאה', read: 'נקרא', abandoned: 'הופסק', 'want-to-read': 'רוצה לקרוא' };
 export interface BookInput {
@@ -9,6 +10,7 @@ export interface BookInput {
   isbn: string; danacode: string; publisher: string; publicationYear: string;
   edition: string; volume: string; language: string; pages: string; personalNotes: string;
   price?: string; genreNames?: string[]; rating?: number | null; shelfIds?: string[]; genreIds?: string[]; tagIds?: string[]; seriesId?: string | null; seriesNumber?: string;
+  publicationDate?: string; binding?: string; authorParts?: ({ givenName: string; familyName: string } | null)[];
 }
 export const emptyInput: BookInput = { title: '', subtitle: '', authors: [], readStatus: 'unread', isbn: '', danacode: '', publisher: '', publicationYear: '', edition: '', volume: '', language: '', pages: '', personalNotes: '' };
 const fail = (message: string): never => { throw new LibraryValidationError(message); };
@@ -30,9 +32,12 @@ export function parseISBN(value: string): { isbn10: string | null; isbn13: strin
   return { isbn10: ten ? code : null, isbn13: thirteen ? code : null };
 }
 export function bookFields(input: BookInput) {
+  const publicationDate = input.publicationDate === undefined ? undefined : optional(input.publicationDate);
+  if (publicationDate && !validDay(publicationDate)) return fail('תאריך הפרסום אינו תקין.');
+  if (publicationDate && input.publicationYear.trim() && +input.publicationYear !== +publicationDate.slice(0, 4)) return fail('שנת ההוצאה אינה תואמת לתאריך הפרסום.');
   if (typeof input.readStatus !== 'string' || !Object.hasOwn(readingStates, input.readStatus)) return fail('מצב הקריאה אינו תקין.');
   if (input.rating !== undefined && input.rating !== null && (!Number.isInteger(input.rating) || input.rating < 1 || input.rating > 5)) return fail('הדירוג צריך להיות בין כוכב אחד לחמישה.');
-  return { ...(input.rating === undefined ? {} : { rating: input.rating }), title: optional(input.title), subtitle: optional(input.subtitle), ...parseISBN(input.isbn), danacode: optional(input.danacode), publisher: optional(input.publisher), publicationYear: number(input.publicationYear, 9999), edition: optional(input.edition), volume: optional(input.volume), language: optional(input.language), pages: number(input.pages, 100000), personalNotes: optional(input.personalNotes, 20000), readStatus: input.readStatus, titleSortKey: normalizeText(input.title) };
+  return { ...(publicationDate === undefined ? {} : { publicationDate }), ...(input.binding === undefined ? {} : { binding: optional(input.binding) }), ...(input.rating === undefined ? {} : { rating: input.rating }), title: optional(input.title), subtitle: optional(input.subtitle), ...parseISBN(input.isbn), danacode: optional(input.danacode), publisher: optional(input.publisher), publicationYear: publicationDate ? +publicationDate.slice(0, 4) : number(input.publicationYear, 9999), edition: optional(input.edition), volume: optional(input.volume), language: optional(input.language), pages: number(input.pages, 100000), personalNotes: optional(input.personalNotes, 20000), readStatus: input.readStatus, titleSortKey: normalizeText(input.title) };
 }
 export function comparableISBN(book: Pick<Book, 'isbn10' | 'isbn13'>): string | null {
   if (book.isbn13) return book.isbn13;
@@ -53,6 +58,7 @@ export async function saveBook(database: LibraryDatabase, input: BookInput, exis
   const price = input.price === undefined ? undefined : parsePrice(input.price);
   if (!Array.isArray(input.authors) || input.authors.length > 30) return fail('רשימת המחברים אינה תקינה.');
   const names = [...new Set(input.authors.map(name => optional(name)).filter((name): name is string => !!name))];
+  if (input.authorParts !== undefined && (!Array.isArray(input.authorParts) || input.authorParts.length !== input.authors.length || input.authorParts.some((part, i) => part !== null && (!part || typeof part.givenName !== 'string' || typeof part.familyName !== 'string' || part.givenName.length > 1000 || part.familyName.length > 1000 || [part.givenName.trim(), part.familyName.trim()].filter(Boolean).join(' ') !== input.authors[i].trim())))) return fail('פרטי המחברים אינם תואמים לשמותיהם.');
   return database.transaction('rw', [database.books, database.copies, database.authors, database.images, database.shelves, database.bookShelves, database.genres, database.tags, database.series, database.metadataSources, database.recognitionDrafts], async () => {
     const current = existing ? await database.books.get(existing.id) : undefined;
     if (existing && (!current || current.revision !== existing.revision)) return fail('הספר השתנה בחלון אחר. סגור ופתח אותו מחדש לפני העריכה.');
@@ -85,9 +91,12 @@ export async function saveBook(database: LibraryDatabase, input: BookInput, exis
       const linked = current ? await database.authors.bulkGet(current.authorIds) : [];
       const author = linked.find(author => author?.displayName === name);
       const id = author?.id ?? crypto.randomUUID();
-      if (!author) await database.authors.add({ id, displayName: name, givenName: null, familyName: null, normalizedName: normalizeText(name) });
+      const part = input.authorParts?.[input.authors.findIndex(value => value.trim() === name)];
+      if (!author) await database.authors.add({ id, displayName: name, givenName: part ? optional(part.givenName) : null, familyName: part ? optional(part.familyName) : null, normalizedName: normalizeText(name) });
+      else if (part) await database.authors.update(id, { givenName: optional(part.givenName), familyName: optional(part.familyName) });
       if (!authorIds.includes(id)) authorIds.push(id);
     }
+    if (input.publicationDate === undefined && current?.publicationDate && fields.publicationYear !== +current.publicationDate.slice(0, 4)) return fail('שנת ההוצאה אינה תואמת לתאריך הפרסום השמור.');
     const base = current ?? (await createBookWithCopy(database, {})).book;
     if (image) await database.images.put(image);
     const book = { ...base, ...fields, ...classification, authorIds, primaryImageId: image === undefined ? base.primaryImageId : image?.id ?? null, updatedAt: new Date().toISOString(), revision: current ? current.revision + 1 : 1 };

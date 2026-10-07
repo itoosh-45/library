@@ -1,12 +1,12 @@
-# Excel template 1 — schema 2
+# Excel template 3 — schema 2
 
-Excel הוא פורמט טבלאי לעריכה ולהעברת נתונים. JSON 8 הוא גיבוי השחזור המלא, עם תמונות וטיוטות צילום מדף. קובצי Excel אינם מוצפנים וכוללים אנשים, השאלות ורשמים אישיים. מפתחות, מטמון ותשובות ספק גולמיות אינם נכללים.
+Excel הוא פורמט טבלאי לעריכה ולהעברת נתונים. JSON הוא גיבוי השחזור המלא, עם תמונות וטיוטות צילום מדף; גרסה 11 שומרת גם תאריך פרסום וסוג כריכה. Excel template 3 מוסיף את השדות ו־hasPublicationDate/hasBinding כדי לשמר את ההבדל בין שדה חסר לשדה ריק. template 1–2 ממשיכים להיות נתמכים. קובצי Excel אינם מוצפנים וכוללים אנשים, השאלות ורשמים אישיים. מפתחות, מטמון ותשובות ספק גולמיות אינם נכללים.
 
 ## גיליונות הקובץ המלא
 
 | גיליון | תוכן וקשרים |
 |---|---|
-| Manifest | format=my-library-xlsx, templateVersion=1, dbSchemaVersion=2, libraryId, exportedAt, הוראות וכל עמודה/סוג/אפשרות עריכה |
+| Manifest | format=my-library-xlsx, templateVersion=3, dbSchemaVersion=2, libraryId, exportedAt, הוראות וכל עמודה/סוג/אפשרות עריכה |
 | Books | כל שדות הספר scalar, ללא מערכי שיוך; titleSortKey מחושב מחדש בייבוא |
 | Copies | bookId; מחיר ביחידות קטנות של currency, ארכוב, תאריכים והערות |
 | Authors | שמות ומזהים; normalizedName מחושב מחדש |

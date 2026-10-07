@@ -1,0 +1,1 @@
+var e=class extends Error{state;constructor(e,t){super(t),this.state=e}};function t(t){if(t=t.replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g,``).trim(),!/^[\x21-\x7E]{20,4096}$/.test(t))throw new e(`key`,`לא ניתן לקרוא את המפתח שהודבק. העתק רק את ערך המפתח, ללא רווחים פנימיים או טקסט נוסף.`);return t}export{t as n,e as t};

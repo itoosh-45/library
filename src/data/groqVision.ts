@@ -1,4 +1,4 @@
-import { normalizeVisionKey, VisionError, type VisionOutcome } from './visionTypes';
+import { normalizeVisionKey, VisionError, type VisionOutcome, type VisionState } from './visionTypes';
 import { recognitionModels, recognitionPrompt, recognitionSchema, shelfRecognitionPrompt, shelfRecognitionSchema, validateRecognition, validateShelfRecognition } from './recognition';
 import { imageSignature } from './images';
 export class GroqVisionSession {
@@ -8,6 +8,7 @@ export class GroqVisionSession {
   clear() { this.cancel(); this.#key=''; this.#free=false; this.#consent=false; }
   cancel() { this.#controller?.abort(); this.#controller=undefined; }
   get hasKey() { return !!this.#key; }
+  get blockedReason(): VisionState { return !this.#key ? 'key' : !this.#free || !this.#consent ? 'spending-lock' : 'quota'; }
   get ready() { return this.hasKey && this.#free && this.#consent && Date.now() >= this.#blockedUntil; }
   async recognize(blob: Blob, mode: 'single' | 'shelf'): Promise<VisionOutcome> {
     if (!this.ready) throw new VisionError('spending-lock','Groq אינו מוגדר במסלול חינמי מאושר, או שהמכסה שלו ממתינה לחידוש.');
@@ -25,7 +26,7 @@ export class GroqVisionSession {
       if(controller.signal.aborted) throw new VisionError('cancelled','הזיהוי בוטל.');
       const prompt=(mode==='shelf'?shelfRecognitionPrompt:recognitionPrompt)+' Return JSON matching this schema: '+JSON.stringify(mode==='shelf'?shelfRecognitionSchema:recognitionSchema);
       const response=await this.fetcher('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},credentials:'omit',redirect:'error',cache:'no-store',referrerPolicy:'no-referrer',signal:controller.signal,body:JSON.stringify({model:recognitionModels.groq,messages:[{role:'system',content:prompt},{role:'user',content:[{type:'text',text:'Read the visible books and identifiers in this image. Return only JSON.'},{type:'image_url',image_url:{url:'data:image/jpeg;base64,'+btoa(binary)}}]}],response_format:{type:'json_object'},max_completion_tokens:8192,temperature:0})});
-      if(!response.ok) { await response.body?.cancel().catch(()=>{}); if(response.status===429) { const retry=Number(response.headers.get('retry-after')); this.#blockedUntil=Date.now()+Math.min(86400,Math.max(60,Number.isFinite(retry)?retry:60))*1000; throw new VisionError('quota','מכסת Groq או מגבלת הקצב הושגה. אין חיוב או ניסיון חוזר אוטומטי.'); } throw new VisionError('unavailable','Groq לא השלים זיהוי. אפשר להשתמש ב-OCR המקומי.'); }
+      if(!response.ok) { await response.body?.cancel().catch(()=>{}); if(response.status===429) { const retry=Number(response.headers.get('retry-after')); this.#blockedUntil=Date.now()+Math.min(86400,Math.max(60,Number.isFinite(retry)?retry:60))*1000; throw new VisionError('quota','מכסת Groq או מגבלת הקצב הושגה. אין חיוב או ניסיון חוזר אוטומטי.',429); } throw new VisionError(response.status===400?'invalid':[401,403].includes(response.status)?'key':'unavailable','Groq לא השלים זיהוי. אפשר להשתמש ב-OCR המקומי.',response.status); }
       if(!response.body) throw new VisionError('invalid','תגובת Groq ריקה.');
       const reader=response.body.getReader(),decoder=new TextDecoder(); let value='',length=0;
       try { for(;;) { const part=await reader.read();if(part.done)break;length+=part.value.byteLength;if(length>128*1024)throw new VisionError('invalid','תגובת Groq גדולה מדי.');value+=decoder.decode(part.value,{stream:true}); } value+=decoder.decode(); } finally { await reader.cancel().catch(()=>{}); }

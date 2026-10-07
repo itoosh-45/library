@@ -119,10 +119,13 @@ test('photo review edits both fields and searches only after explicit approval',
   await page.getByRole('link', { name: 'כל הספרים', exact: true }).click();
 
   await page.route('https://openlibrary.org/**', route => { searches.push(route.request().url()); return route.fulfill({ json: { docs: [] } }); });
-  await page.evaluate(async () => {
-    const vp='/library/src/data/vision.ts'; const { personalVisionSession }=await import(vp);
-    personalVisionSession.recognize=async()=>({ model:'tesseract-layout-v1', usedBackup:false, result:{items:[{title:'שם שזוהה',authors:['מחבר שזוהה'],isbn:null,danacode:null,publisher:null,visibleText:'שם שזוהה מחבר שזוהה',evidenceByField:{title:['שם שזוהה'],authors:['מחבר שזוהה'],isbn:[],danacode:[],publisher:[]},imageIndex:0,bbox:null,uncertaintyReasons:[]}]}});
-  });
+  await page.route('https://generativelanguage.googleapis.com/**', route => route.fulfill({ json: {
+    candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ items: [{
+      title: 'שם שזוהה', authors: ['מחבר שזוהה'], isbn: null, danacode: null, publisher: null,
+      visibleText: 'שם שזוהה מחבר שזוהה', evidenceByField: { title: ['שם שזוהה'], authors: ['מחבר שזוהה'], isbn: [], danacode: [], publisher: [] },
+      imageIndex: 0, bbox: null, uncertaintyReasons: [],
+    }] }) }] } }],
+  } }));
   await page.evaluate(async()=>{const dp='/library/src/data/database.ts',bp='/library/src/data/books.ts';const {db}=await import(dp),{saveBook,emptyInput}=await import(bp);await saveBook(db,{...emptyInput,title:'ספר קיים לבדיקה',isbn:'9780140328721'});});
   await page.getByRole('button',{name:/ספר קיים לבדיקה ללא מחבר/}).click();
   for(const name of ['סריקת תמונה','סריקת ברקוד','חיפוש']) await expect(page.getByRole('button',{name,exact:true})).toHaveCount(1);
@@ -135,7 +138,7 @@ test('photo review edits both fields and searches only after explicit approval',
   await expect(page.getByLabel('שם הספר',{exact:true})).toHaveValue('שם מתוקן');await expect(page.getByLabel('שם פרטי של המחבר',{exact:true})).toHaveValue('מחבר מתוקן');
   await page.getByRole('button',{name:'שמירת הספר',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('heading',{name:'שם מתוקן',exact:true})).toBeVisible();
-  const source=await page.evaluate(async()=>{const dp='/library/src/data/database.ts';const {db}=await import(dp);return (await db.metadataSources.toArray())[0];});expect(source).toMatchObject({provider:'ocr',userOverriddenFields:['title','authors']});
+  const source=await page.evaluate(async()=>{const dp='/library/src/data/database.ts';const {db}=await import(dp);return (await db.metadataSources.toArray())[0];});expect(source).toMatchObject({provider:'gemini',userOverriddenFields:['title','authors']});
 });
 
 test('stars at the top of a book save, reload, change and clear by touch', async ({ page }) => {

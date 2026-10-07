@@ -3,6 +3,7 @@ export interface Book {
   id: string; title: string | null; subtitle: string | null; authorIds: string[];
   isbn10: string | null; isbn13: string | null; danacode: string | null;
   publisher: string | null; publicationYear: number | null; edition: string | null;
+  publicationDate?: string | null; binding?: string | null;
   volume: string | null; language: string | null; pages: number | null;
   seriesId: string | null; seriesNumber: number | null; genreIds: string[]; tagIds: string[];
   rating?: number | null; readStatus: ReadStatus; personalNotes: string | null; primaryImageId: string | null;
@@ -23,7 +24,7 @@ export interface Loan { id: string; copyId: string; personId: string; borrowedAt
 export interface StoredImage { id: string; blob: Blob; mimeType: string; width: number; height: number; byteLength: number; sha256: string; sourceUrl: string | null; createdAt: string }
 export type SettingKey = 'libraryId' | 'libraryName' | 'displayMode' | 'preferredModel' | 'lastBackupAt' | 'lastBackupCheckedAt';
 export interface Setting { key: SettingKey; value: string }
-export type MetadataField = 'title' | 'subtitle' | 'authors' | 'isbn10' | 'isbn13' | 'danacode' | 'publisher' | 'publicationYear' | 'edition' | 'volume' | 'language' | 'pages';
+export type MetadataField = 'title' | 'subtitle' | 'authors' | 'isbn10' | 'isbn13' | 'danacode' | 'publisher' | 'publicationYear' | 'publicationDate' | 'binding' | 'edition' | 'volume' | 'language' | 'pages';
 export interface MetadataSource { id: string; bookId: string; provider: string; recordId: string; sourceUrl: string | null; fetchedAt: string; fieldValues: Partial<Record<MetadataField, string | number | string[] | null>>; selectedFields: MetadataField[]; userOverriddenFields: MetadataField[]; recognition?: { version: string; model: string; imageHash: string; item: import('./recognition').RecognizedBook; batchId?: string; itemId?: string } }
 export interface MetadataCache { key: string; provider: string; fetchedAt: string; expiresAt: string; minimalPayload: MetadataSource['fieldValues'][]; candidates?: { provider: string; recordId: string; sourceUrl: string | null; fetchedAt: string; kind: 'work' | 'edition' | 'volume'; fields: MetadataSource['fieldValues']; warnings: string[] }[] }
 export interface DraftImage {

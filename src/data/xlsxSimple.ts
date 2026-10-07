@@ -22,7 +22,7 @@ export async function simpleWorkbookCandidate(database: LibraryDatabase, input: 
     let column: SimpleField = 'title';
     try {
       const current = { ...emptyInput };
-      for (const key of ['title','subtitle','danacode','publisher','publicationYear','edition','volume','language','pages','personalNotes'] as const) {
+      for (const key of ['title','subtitle','danacode','publisher','publicationYear','publicationDate','binding','edition','volume','language','pages','personalNotes'] as const) {
         column = key; current[key] = value(key);
         if (current[key].length > (key === 'personalNotes' ? 20000 : 1000)) return workbookError(input.sheet, workbookRow(row, index), key, 'טקסט ארוך מדי');
         if (['pages','publicationYear'].includes(key) && current[key] && (!/^\d+$/.test(current[key]) || +current[key] < 1 || +current[key] > (key === 'pages' ? 100000 : 9999))) return workbookError(input.sheet, workbookRow(row, index), key, 'מספר חיובי מחוץ לטווח');

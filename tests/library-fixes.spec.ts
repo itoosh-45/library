@@ -1,5 +1,49 @@
 import { test, expect, type Page } from '@playwright/test';
 
+test('reference navigation and split author details survive reload on a narrow phone', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto('');
+  await expect(page.getByRole('navigation', { name: 'ניווט ראשי' }).getByRole('link')).toHaveText(['מדפים', 'כל הספרים', 'השאלות', 'תגיות']);
+  await expect(page.getByRole('link', { name: 'כל הספרים', exact: true })).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+  await page.getByLabel('שם הספר', { exact: true }).fill('ספר לבדיקת פרטים');
+  await page.getByLabel('שם פרטי של המחבר', { exact: true }).fill('שם פרטי');
+  await page.getByLabel('שם משפחה של המחבר', { exact: true }).fill('משפחה כפולה');
+  await page.getByLabel('תאריך פרסום', { exact: true }).fill('2024-02-29');
+  await page.getByLabel('סוג כריכה', { exact: true }).fill('כריכה קשה');
+  await expect(page.getByLabel('הערות אישיות', { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: 'test-results/reference-book-form.png', fullPage: true });
+  await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.reload();
+  await page.getByRole('button', { name: /ספר לבדיקת פרטים שם פרטי משפחה כפולה/ }).click();
+  await expect(page.getByLabel('שם פרטי של המחבר', { exact: true })).toHaveValue('שם פרטי');
+  await expect(page.getByLabel('שם משפחה של המחבר', { exact: true })).toHaveValue('משפחה כפולה');
+  await expect(page.getByLabel('תאריך פרסום', { exact: true })).toHaveValue('2024-02-29');
+  await expect(page.getByLabel('סוג כריכה', { exact: true })).toHaveValue('כריכה קשה');
+  expect(await page.evaluate(() => document.querySelector('dialog')!.scrollWidth <= document.querySelector('dialog')!.clientWidth)).toBe(true);
+});
+
+test('tag page creates collections and opens the books assigned to them', async ({ page }) => {
+  await page.goto('');
+  await page.getByRole('link', { name: 'תגיות', exact: true }).click();
+  await page.getByText('ניהול תגיות', { exact: true }).click();
+  await page.getByRole('button', { name: 'הוספת תגית', exact: true }).click();
+  await page.getByLabel('שם האוסף', { exact: true }).fill('תגית בדיקה');
+  await page.getByRole('button', { name: 'שמירת האוסף', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('link', { name: 'כל הספרים', exact: true }).click();
+  await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
+  await page.getByLabel('שם הספר', { exact: true }).fill('ספר מתויג');
+  await page.locator('summary').filter({ hasText: /^תגיות$/ }).click();
+  await page.getByLabel('תגית בדיקה', { exact: true }).check();
+  await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('link', { name: 'תגיות', exact: true }).click();
+  await page.getByRole('button', { name: 'תגית בדיקה 1 ספרים', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'ספר מתויג', exact: true })).toBeVisible();
+});
+
 test.use({ viewport: { width: 390, height: 844 } });
 
 async function barcodeImage(page: Page, code: string, rotate = false) {

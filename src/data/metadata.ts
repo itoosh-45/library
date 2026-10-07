@@ -2,9 +2,10 @@ import { safeCatalogCoverUrl } from './catalogCoverUrl';
 import type { MetadataField, MetadataSource } from './models';
 import { LibraryValidationError } from './library';
 import { comparableISBN, parseISBN } from './books';
+import { validDay } from './loans';
 import { recognitionModels, recognitionVersion, recognitionValues, shelfRecognitionVersion, validateRecognition } from './recognition';
 
-export const metadataFields: MetadataField[] = ['title', 'subtitle', 'authors', 'isbn10', 'isbn13', 'danacode', 'publisher', 'publicationYear', 'edition', 'volume', 'language', 'pages'];
+export const metadataFields: MetadataField[] = ['title', 'subtitle', 'authors', 'isbn10', 'isbn13', 'danacode', 'publisher', 'publicationYear', 'publicationDate', 'binding', 'edition', 'volume', 'language', 'pages'];
 export const providerNames = { openlibrary: 'Open Library', googlebooks: 'Google Books', nli: 'הספרייה הלאומית' } as const;
 export type Provider = keyof typeof providerNames;
 export type FieldValues = MetadataSource['fieldValues'];
@@ -30,6 +31,7 @@ export function validateFieldValues(value: unknown): FieldValues {
     else if (key === 'publicationYear' || key === 'pages') { if (typeof item !== 'number' || !Number.isInteger(item) || item < 1 || item > (key === 'pages' ? 100000 : 9999)) return fail(); }
     else if (typeof item !== 'string' || !item.trim() || item.length > 1000) return fail();
     if ((key === 'isbn10' || key === 'isbn13') && parseISBN(item as string)[key] !== item) return fail();
+    if (key === 'publicationDate' && !validDay(item)) return fail();
   }
   if (fields.isbn10 && fields.isbn13 && comparableISBN({ isbn10: fields.isbn10 as string, isbn13: null }) !== fields.isbn13) return fail();
   return fields as FieldValues;
@@ -41,7 +43,7 @@ export function validateCandidate(value: unknown): Candidate {
   if (Object.hasOwn(row, 'genres') && (!Array.isArray(row.genres) || row.genres.length > 20 || row.genres.some(name => typeof name !== 'string' || !name.trim() || name.length > 120))) return fail();
   validateFieldValues(row.fields);
   if (!matchesProvider(row.provider, row.sourceUrl)) return fail();
-  if (row.kind === 'work' && ['isbn10', 'isbn13', 'publicationYear', 'pages', 'publisher', 'edition', 'volume'].some(key => (row.fields as FieldValues)[key as MetadataField] != null)) return fail();
+  if (row.kind === 'work' && ['isbn10', 'isbn13', 'publicationYear', 'publicationDate', 'binding', 'pages', 'publisher', 'edition', 'volume'].some(key => (row.fields as FieldValues)[key as MetadataField] != null)) return fail();
   return row as unknown as Candidate;
 }
 export function validateMetadataSource(value: unknown): MetadataSource {

@@ -13,7 +13,7 @@ import type { BookInput } from './data/books';
 import { errorMessage } from './data/errors';
 import { gatewayAdapter } from './data/catalogGateway';
 
-const fieldLabels: Record<MetadataField, string> = { title: 'שם הספר', subtitle: 'כותרת משנה', authors: 'מחברים', isbn10: 'ISBN-10', isbn13: 'ISBN-13', danacode: 'דאנאקוד', publisher: 'הוצאה לאור', publicationYear: 'שנת הוצאה', edition: 'מהדורה', volume: 'כרך', language: 'שפה', pages: 'מספר עמודים' };
+const fieldLabels: Record<MetadataField, string> = { title: 'שם הספר', subtitle: 'כותרת משנה', authors: 'מחברים', isbn10: 'ISBN-10', isbn13: 'ISBN-13', danacode: 'דאנאקוד', publisher: 'הוצאה לאור', publicationYear: 'שנת הוצאה', publicationDate: 'תאריך פרסום', binding: 'סוג כריכה', edition: 'מהדורה', volume: 'כרך', language: 'שפה', pages: 'מספר עמודים' };
 const openLibrary = openLibraryAdapter();
 function serverAdapter(provider: 'nli' | 'googlebooks') {
   const origin = import.meta.env.VITE_CATALOG_GATEWAY;

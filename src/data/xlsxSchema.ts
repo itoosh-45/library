@@ -5,7 +5,7 @@ const columns = (text: string, number = '', boolean = '', json = ''): Record<str
   ...boolean.split(' ').filter(Boolean).map(key => [key, 'boolean']), ...json.split(' ').filter(Boolean).map(key => [key, 'json']),
 ]);
 export const workbookSchema: Record<string, SheetSchema> = {
-  Books: { table: 'books', columns: columns('id title subtitle isbn10 isbn13 danacode publisher edition volume language seriesId readStatus personalNotes primaryImageId createdAt updatedAt titleSortKey authorNames shelfNames genreNames tagNames seriesName', 'publicationYear pages seriesNumber revision rating priceILS', 'hasRating') },
+  Books: { table: 'books', columns: columns('id title subtitle isbn10 isbn13 danacode publisher publicationDate binding edition volume language seriesId readStatus personalNotes primaryImageId createdAt updatedAt titleSortKey authorNames shelfNames genreNames tagNames seriesName', 'publicationYear pages seriesNumber revision rating priceILS', 'hasRating hasPublicationDate hasBinding') },
   Copies: { table: 'copies', columns: columns('id bookId label currency notes archivedAt createdAt updatedAt', 'purchasePriceMinor') },
   Authors: { table: 'authors', columns: columns('id displayName givenName familyName normalizedName') },
   BookAuthors: { table: 'bookAuthors', columns: columns('bookId authorId', 'position') },
@@ -22,15 +22,16 @@ export const workbookSchema: Record<string, SheetSchema> = {
   Settings: { table: 'settings', columns: columns('key value') },
   ImageRefs: { table: 'imageRefs', columns: columns('id sha256 sourceUrl') },
 };
-export const bookDisplayColumns = ['authorNames', 'shelfNames', 'genreNames', 'tagNames', 'seriesName', 'priceILS', 'hasRating'];
-export const legacyWorkbookSchema = { ...workbookSchema, Books: { ...workbookSchema.Books, columns: Object.fromEntries(Object.entries(workbookSchema.Books.columns).filter(([key]) => !bookDisplayColumns.includes(key) && key !== 'rating')) } };
+export const bookDisplayColumns = ['authorNames', 'shelfNames', 'genreNames', 'tagNames', 'seriesName', 'priceILS', 'hasRating', 'hasPublicationDate', 'hasBinding'];
+export const version2WorkbookSchema = { ...workbookSchema, Books: { ...workbookSchema.Books, columns: Object.fromEntries(Object.entries(workbookSchema.Books.columns).filter(([key]) => !['publicationDate', 'binding', 'hasPublicationDate', 'hasBinding'].includes(key))) } };
+export const legacyWorkbookSchema = { ...workbookSchema, Books: { ...workbookSchema.Books, columns: Object.fromEntries(Object.entries(workbookSchema.Books.columns).filter(([key]) => !bookDisplayColumns.includes(key) && !['rating', 'publicationDate', 'binding'].includes(key))) } };
 export const manifestColumns = ['key', 'value', 'sheet', 'column', 'type', 'editable'];
-export const simpleFields = ['title', 'subtitle', 'authors', 'isbn', 'danacode', 'publisher', 'publicationYear', 'edition', 'volume', 'language', 'pages', 'personalNotes', 'readStatus', 'copies', 'purchasePrice', 'currency', 'copyNotes', 'createdAt'] as const;
+export const simpleFields = ['title', 'subtitle', 'authors', 'isbn', 'danacode', 'publisher', 'publicationYear', 'publicationDate', 'binding', 'edition', 'volume', 'language', 'pages', 'personalNotes', 'readStatus', 'copies', 'purchasePrice', 'currency', 'copyNotes', 'createdAt'] as const;
 export type SimpleField = typeof simpleFields[number];
-export const simpleFieldLabels: Record<SimpleField, string> = { title: 'שם הספר', subtitle: 'כותרת משנה', authors: 'מחברים', isbn: 'ISBN', danacode: 'דאנאקוד', publisher: 'הוצאה', publicationYear: 'שנת הוצאה', edition: 'מהדורה', volume: 'כרך', language: 'שפה', pages: 'עמודים', personalNotes: 'הערות לספר', readStatus: 'מצב קריאה', copies: 'כמות עותקים', purchasePrice: 'מחיר עותק', currency: 'מטבע', copyNotes: 'הערות לעותק', createdAt: 'תאריך הוספה' };
+export const simpleFieldLabels: Record<SimpleField, string> = { title: 'שם הספר', subtitle: 'כותרת משנה', authors: 'מחברים', isbn: 'ISBN', danacode: 'דאנאקוד', publisher: 'הוצאה', publicationYear: 'שנת הוצאה', publicationDate: 'תאריך פרסום', binding: 'סוג כריכה', edition: 'מהדורה', volume: 'כרך', language: 'שפה', pages: 'עמודים', personalNotes: 'הערות לספר', readStatus: 'מצב קריאה', copies: 'כמות עותקים', purchasePrice: 'מחיר עותק', currency: 'מטבע', copyNotes: 'הערות לעותק', createdAt: 'תאריך הוספה' };
 const aliases: Record<SimpleField, string[]> = {
   title: ['שם', 'שם הספר', 'כותרת'], subtitle: ['כותרת משנה'], authors: ['מחבר', 'מחברים', 'author'], isbn: ['isbn10', 'isbn13', 'מסתב'], danacode: ['דאנאקוד', 'דנה קוד'], publisher: ['הוצאה', 'מוציא לאור'],
-  publicationYear: ['שנה', 'שנת הוצאה'], edition: ['מהדורה'], volume: ['כרך'], language: ['שפה'], pages: ['עמודים'], personalNotes: ['הערות', 'רשמים'], readStatus: ['מצב קריאה'], copies: ['עותקים', 'כמות', 'מספר עותקים'],
+  publicationYear: ['שנה', 'שנת הוצאה'], publicationDate: ['תאריך פרסום'], binding: ['סוג כריכה', 'כריכה'], edition: ['מהדורה'], volume: ['כרך'], language: ['שפה'], pages: ['עמודים'], personalNotes: ['הערות', 'רשמים'], readStatus: ['מצב קריאה'], copies: ['עותקים', 'כמות', 'מספר עותקים'],
   purchasePrice: ['מחיר', 'מחיר רכישה'], currency: ['מטבע'], copyNotes: ['הערות עותק'], createdAt: ['תאריך', 'תאריך הוספה'],
 };
 export function suggestedMapping(headers: string[]): Record<string, SimpleField> {

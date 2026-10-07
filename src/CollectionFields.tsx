@@ -23,11 +23,15 @@ export function CollectionFields({ bookId, input, onChange, onBusyChange }: { bo
 }
 export function SeriesFields({ input, onChange, onBusyChange }: { input: BookInput; onChange: (input: BookInput) => void; onBusyChange: (busy: boolean) => void }) {
   const series = useLiveQuery(() => db.series.toArray()) ?? [];
-  return <section>
+  return <section className="series-fields">
     <label className="field">סדרה<select aria-label="סדרה" value={input.seriesId ?? ''} onChange={event => onChange({ ...input, seriesId: event.target.value || null, seriesNumber: event.target.value ? input.seriesNumber : '' })}><option value="">ללא סדרה</option>{series.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
     <QuickCollection kind="series" onBusyChange={onBusyChange} onCreated={id => onChange({ ...input, seriesId: id })} />
     <label className="field">מספר בסדרה<input inputMode="decimal" disabled={!input.seriesId} value={input.seriesNumber ?? ''} maxLength={20} onChange={event => onChange({ ...input, seriesNumber: event.target.value })} /></label>
   </section>;
+}
+export function TagField({ input, onChange }: { input: BookInput; onChange: (input: BookInput) => void }) {
+  const tags = useLiveQuery(() => db.tags.toArray()) ?? [];
+  return <details><summary>תגיות</summary><fieldset className="choices"><legend>שיוך תגיות לספר</legend>{!tags.length && <p>אפשר ליצור תגיות בלשונית תגיות.</p>}{tags.map(tag => <label className="check" key={tag.id}><input type="checkbox" checked={(input.tagIds ?? []).includes(tag.id)} onChange={event => onChange({ ...input, tagIds: event.target.checked ? [...(input.tagIds ?? []), tag.id] : (input.tagIds ?? []).filter(id => id !== tag.id) })} />{tag.name}</label>)}</fieldset></details>;
 }
 function QuickCollection({ kind, onCreated, onBusyChange }: { kind: CollectionKind; onCreated: (id: string) => void; onBusyChange: (busy: boolean) => void }) {
   const [name, setName] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('');

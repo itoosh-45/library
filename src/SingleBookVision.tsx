@@ -10,7 +10,7 @@ import type { RecognitionSelection } from './data/catalogSave';
 import { errorMessage } from './data/errors';
 
 const labels: Record<RecognitionField, string> = { title: 'שם הספר', authors: 'מחברים', isbn: 'ISBN', danacode: 'דאנאקוד', publisher: 'הוצאה לאור' };
-export default function SingleBookVision({ onClose, onApply, simple = false }: { simple?: boolean; onClose: () => void; onApply: (selection: RecognitionSelection) => void }) {
+export default function SingleBookVision({ onClose, onApply, simple = false }: { simple?: boolean; onClose: () => void; onApply: (selection: RecognitionSelection, searchAfter?: boolean, review?: { title: string; authors: string[] }) => void }) {
   const online = useOnline();
   const [method,setMethod]=useState<'auto'|'local'>(personalVisionSession.hasKey?'auto':'local');
   const sourceRef = useRef<VisionImageSource | undefined>(undefined), sequence = useRef(0);
@@ -19,6 +19,7 @@ export default function SingleBookVision({ onClose, onApply, simple = false }: {
   const [crop, setCrop] = useState<ImageCrop>([...fullImage]), [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [ready, setReady] = useState(personalVisionSession.ready), [working, setWorking] = useState(false), [running, setRunning] = useState(false), [message, setMessage] = useState('');
   const [outcome, setOutcome] = useState<VisionOutcome>(), [selected, setSelected] = useState<RecognitionField[]>([]), [imageHash, setImageHash] = useState(''), [fetchedAt, setFetchedAt] = useState('');
+  const [reviewTitle, setReviewTitle] = useState(''), [reviewAuthor, setReviewAuthor] = useState('');
   useEffect(() => () => { sequence.current++; personalVisionSession.cancel(); sourceRef.current?.dispose(); }, []);
   useEffect(() => { if (!prepared) return; const url = URL.createObjectURL(prepared.blob); if (previewRef.current) previewRef.current.src = url; return () => URL.revokeObjectURL(url); }, [prepared]);
   function cancel() { sequence.current++; personalVisionSession.cancel(); setWorking(false); setRunning(false); }
@@ -28,7 +29,7 @@ export default function SingleBookVision({ onClose, onApply, simple = false }: {
     try {
       const loaded = await loadVisionImage(file); if (request !== sequence.current) { loaded.dispose(); return; }
       sourceRef.current = loaded; setSource(loaded);
-      const image = await prepareVisionImage(loaded); if (request !== sequence.current) return;
+      const image = await prepareVisionImage(loaded, fullImage, 0, method === 'local'); if (request !== sequence.current) return;
       setPrepared(image);
       if (method==='local' || personalVisionSession.hasKey) await recognize(image);
       else setMessage('התמונה המלאה מוכנה לשליחה, ללא צורך בחיתוך. חבר מפתח אישי כדי לזהות.');
@@ -38,7 +39,7 @@ export default function SingleBookVision({ onClose, onApply, simple = false }: {
   }
   async function prepare() {
     if (!source) return; cancel(); setWorking(true); setOutcome(undefined); setSelected([]); const request = sequence.current;
-    try { const image = await prepareVisionImage(source, crop, rotation); if (request !== sequence.current) return; setPrepared(image); setMessage('התמונה הוכנה במכשיר; בדוק שהטקסט קריא לפני השליחה.'); }
+    try { const image = await prepareVisionImage(source, crop, rotation, method === 'local'); if (request !== sequence.current) return; setPrepared(image); setMessage('התמונה הוכנה במכשיר; בדוק שהטקסט קריא לפני השליחה.'); }
     catch (error) { if (request === sequence.current) { setPrepared(undefined); setMessage(errorMessage(error)); } }
     finally { if (request === sequence.current) setWorking(false); }
   }
@@ -47,15 +48,19 @@ export default function SingleBookVision({ onClose, onApply, simple = false }: {
     try {
       const hash = await hashBytes(await image.blob.arrayBuffer()); if (request !== sequence.current) return;
       const value = await personalVisionSession.recognize(image.blob, reason => { if (request === sequence.current) setMessage(reason ?? 'מנסה זיהוי חלופי…'); }, 'single', method==='local');
-      if (request !== sequence.current) return; setOutcome(value); setImageHash(hash); setFetchedAt(new Date().toISOString()); setMessage(value.result.items.length ? 'בדוק את הפרטים לפני שמירת הספר.' : 'לא זוהה ספר קריא. נסה צילום קרוב יותר או הוסף ידנית.');
+      if (request !== sequence.current) return; setOutcome(value); setReviewTitle(value.result.items[0]?.title ?? ''); setReviewAuthor(value.result.items[0]?.authors.join(' · ') ?? ''); setImageHash(hash); setFetchedAt(new Date().toISOString()); setMessage(value.result.items.length ? 'בדוק ותקן את שם הספר והמחבר. להריץ חיפוש לפי הפרטים?' : 'לא זוהה ספר קריא. נסה צילום קרוב יותר או הוסף ידנית.');
     } catch (error) { if (request === sequence.current) { setReady(personalVisionSession.ready); setMessage(errorMessage(error)); } }
     finally { if (request === sequence.current) { setWorking(false); setRunning(false); } }
   }
   const item = outcome?.result.items[0];
   const available = item ? recognitionFields.filter(field => field === 'authors' ? item.authors.length : item[field]) : [];
-  const appliedFields = simple ? available : selected;
+  const appliedFields = simple ? available.filter(field => field === 'title' || field === 'authors') : selected;
+  function apply(searchAfter = false) {
+    if (!item || !outcome) return;
+    cancel(); onApply({ item, selected: appliedFields, model: outcome.model, imageHash, fetchedAt }, searchAfter, simple ? { title: reviewTitle.trim(), authors: reviewAuthor.split(' · ').map(name => name.trim()).filter(Boolean) } : undefined);
+  }
   return <Sheet title="זיהוי ספר מתמונה" onClose={() => { cancel(); onClose(); }}>
-    {!online && <p role="status">אין רשת. OCR מקומי זמין במכשיר.</p>}<p className="hint">בחר או צלם תמונה. כשהמפתח האישי והסכמת השליחה מוגדרים, התמונה המלאה תישלח אוטומטית לזיהוי. אין צורך בחיתוך ואין שמירה אוטומטית של ספר.</p>
+    {!online && <p role="status">אין רשת. OCR מקומי זמין במכשיר.</p>}<p className="hint">צלם כריכה או שדרה בעברית כדי לזהות שם ספר ומחבר. בחר או צלם תמונה. כשהמפתח האישי והסכמת השליחה מוגדרים, התמונה המלאה תישלח אוטומטית לזיהוי. אין צורך בחיתוך ואין שמירה אוטומטית של ספר.</p>
     <label className="field">דרך הזיהוי<select aria-label="דרך הזיהוי" value={method} disabled={working} onChange={event=>{invalidate();setMethod(event.target.value as 'auto'|'local');}}><option value="auto">Gemini · Groq · OCR כגיבוי</option><option value="local">OCR מקומי · ללא API</option></select></label>
     {method==='auto' && (!simple || !ready) && <details open={!ready || undefined}><summary>מפתח אישי ותנאי שליחה</summary><VisionKey onChange={value => { cancel(); setReady(value); setOutcome(undefined); setSelected([]); }} /></details>}
     <div className="field-grid"><label className="field">בחירת תמונת ספר<input type="file" accept="image/*" disabled={working} onChange={event => { void choose(event.target.files?.[0]); event.target.value = ''; }} /></label><label className="field">צילום ספר במצלמה<input type="file" accept="image/*" capture="environment" disabled={working} onChange={event => { void choose(event.target.files?.[0]); event.target.value = ''; }} /></label></div>
@@ -65,6 +70,6 @@ export default function SingleBookVision({ onClose, onApply, simple = false }: {
     {prepared && <section className="notice"><h3>התמונה לזיהוי</h3><img ref={previewRef} width={prepared.width} height={prepared.height} className="vision-prepared" alt="תמונה מוכנה לשליחה לזיהוי" /><p className="hint">{prepared.width}×{prepared.height} · JPEG · {Math.ceil(prepared.blob.size / 1024)}KB</p><button type="button" disabled={working || method==='auto'&&!personalVisionSession.hasKey} onClick={() => void recognize()}>זיהוי התמונה</button></section>}
     {working && <button type="button" className="secondary" onClick={() => { cancel(); setMessage(running ? 'הזיהוי בוטל. אין ניסיון חוזר אוטומטי.' : 'ההכנה בוטלה.'); }}>ביטול הפעולה</button>}
     <p role="status" aria-live="polite" className="form-status">{message}</p>
-    {item && <section className="notice"><h3>{simple ? 'פרטי הספר שזוהה' : 'בחירת שדות מהתמונה'}</h3>{!simple && <p className="hint">{outcome?.model}{outcome?.usedBackup ? ' · מודל גיבוי' : ''} · כל השדות מתחילים ללא בחירה.</p>}{item.uncertaintyReasons.map((reason, i) => <p className="hint" key={i}>{reason}</p>)}{available.map(field => simple ? <p key={field}>{labels[field]}: {field === 'authors' ? item.authors.join(' · ') : item[field]}</p> : <label className="catalog-choice" key={field}><input type="checkbox" checked={selected.includes(field)} onChange={event => setSelected(old => event.target.checked ? [...old, field] : old.filter(value => value !== field))} /><span>{labels[field]}: {field === 'authors' ? item.authors.join(' · ') : item[field]}<small>ראיה: {item.evidenceByField[field].join(' · ')}</small></span></label>)}<details><summary>הטקסט שנקרא בתמונה</summary><p className="visible-text">{item.visibleText}</p></details><button type="button" disabled={!appliedFields.length} onClick={() => { cancel(); onApply({ item, selected: appliedFields, model: outcome!.model, imageHash, fetchedAt }); }}>{simple ? 'שימוש בפרטי הספר' : 'החלת השדות מהתמונה על הטיוטה'}</button></section>}
+    {item && <section className="notice"><h3>{simple ? 'פרטי הספר שזוהה' : 'בחירת שדות מהתמונה'}</h3>{!simple && <p className="hint">{outcome?.model}{outcome?.usedBackup ? ' · מודל גיבוי' : ''} · כל השדות מתחילים ללא בחירה.</p>}{item.uncertaintyReasons.map((reason, i) => <p className="hint" key={i}>{reason}</p>)}{simple && <><label className="field">שם הספר שזוהה<input value={reviewTitle} maxLength={1000} onChange={event => setReviewTitle(event.target.value)} /></label><label className="field">מחבר שזוהה<input value={reviewAuthor} maxLength={1000} onChange={event => setReviewAuthor(event.target.value)} /></label><p>להריץ חיפוש לפי הפרטים?</p></>}{(!simple ? available : []).map(field => <label className="catalog-choice" key={field}><input type="checkbox" checked={selected.includes(field)} onChange={event => setSelected(old => event.target.checked ? [...old, field] : old.filter(value => value !== field))} /><span>{labels[field]}: {field === 'authors' ? item.authors.join(' · ') : item[field]}<small>ראיה: {item.evidenceByField[field].join(' · ')}</small></span></label>)}<details><summary>הטקסט שנקרא בתמונה</summary><p className="visible-text">{item.visibleText}</p></details><div className="actions">{simple && <button type="button" disabled={working || !reviewTitle.trim() && !reviewAuthor.trim()} onClick={() => apply(true)}>חפש לפי הפרטים</button>}<button type="button" disabled={working || (simple ? !reviewTitle.trim() && !reviewAuthor.trim() : !appliedFields.length)} onClick={() => apply()}>{simple ? 'שימוש בפרטים ללא חיפוש' : 'החלת השדות מהתמונה על הטיוטה'}</button></div></section>}
   </Sheet>;
 }

@@ -1,12 +1,13 @@
 import { bookComparator, emptyFilters, filterBooks, type SearchData, type SortKey } from './search';
-export interface AdvancedFilters { genre: string; loan: string; fromYear: string; toYear: string; addedFrom: string; addedTo: string; rating: string; minPrice: string; maxPrice: string; sort: SortKey; descending: boolean }
-export const defaultAdvanced: AdvancedFilters = { genre: '', loan: '', fromYear: '', toYear: '', addedFrom: '', addedTo: '', rating: '', minPrice: '', maxPrice: '', sort: 'title', descending: false };
+export interface AdvancedFilters { genre: string; series?: string; loan: string; fromYear: string; toYear: string; addedFrom: string; addedTo: string; rating: string; minPrice: string; maxPrice: string; sort: SortKey; descending: boolean }
+export const defaultAdvanced: AdvancedFilters = { genre: '', series: '', loan: '', fromYear: '', toYear: '', addedFrom: '', addedTo: '', rating: '', minPrice: '', maxPrice: '', sort: 'title', descending: false };
 export function advancedBooks(data: SearchData, query: string, filters: AdvancedFilters) {
   const byCopy = new Map(data.copies.map(copy => [copy.id, copy.bookId]));
   const borrowed = new Set(data.loans.filter(loan => !loan.returnedAt).map(loan => byCopy.get(loan.copyId)));
   const prices = new Map<string, number>();
   for (const copy of data.copies) if (!copy.archivedAt && copy.currency === 'ILS' && copy.purchasePriceMinor !== null) prices.set(copy.bookId, Math.min(prices.get(copy.bookId) ?? Infinity, copy.purchasePriceMinor / 100));
   const books = filterBooks(data, { ...emptyFilters, query, genreId: filters.genre }).filter(book => {
+    if (filters.series && book.seriesId !== filters.series) return false;
     if (filters.loan && borrowed.has(book.id) !== (filters.loan === 'borrowed')) return false;
     if (filters.fromYear && (book.publicationYear === null || book.publicationYear < +filters.fromYear)) return false;
     if (filters.toYear && (book.publicationYear === null || book.publicationYear > +filters.toYear)) return false;

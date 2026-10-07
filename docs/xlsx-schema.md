@@ -1,4 +1,4 @@
-# Excel template 3 — schema 2
+# Excel template 4 — schema 2
 
 Excel הוא פורמט טבלאי לעריכה ולהעברת נתונים. JSON הוא גיבוי השחזור המלא, עם תמונות וטיוטות צילום מדף; גרסה 11 שומרת גם תאריך פרסום וסוג כריכה. Excel template 3 מוסיף את השדות ו־hasPublicationDate/hasBinding כדי לשמר את ההבדל בין שדה חסר לשדה ריק. template 1–2 ממשיכים להיות נתמכים. קובצי Excel אינם מוצפנים וכוללים אנשים, השאלות ורשמים אישיים. מפתחות, מטמון ותשובות ספק גולמיות אינם נכללים.
 
@@ -6,7 +6,7 @@ Excel הוא פורמט טבלאי לעריכה ולהעברת נתונים. JSO
 
 | גיליון | תוכן וקשרים |
 |---|---|
-| Manifest | format=my-library-xlsx, templateVersion=3, dbSchemaVersion=2, libraryId, exportedAt, הוראות וכל עמודה/סוג/אפשרות עריכה |
+| Manifest | format=my-library-xlsx, templateVersion=4, dbSchemaVersion=2, libraryId, exportedAt, הוראות וכל עמודה/סוג/אפשרות עריכה |
 | Books | כל שדות הספר scalar, ללא מערכי שיוך; titleSortKey מחושב מחדש בייבוא |
 | Copies | bookId; מחיר ביחידות קטנות של currency, ארכוב, תאריכים והערות |
 | Authors | שמות ומזהים; normalizedName מחושב מחדש |
@@ -53,3 +53,7 @@ Excel הוא פורמט טבלאי לעריכה ולהעברת נתונים. JSO
 public/templates/full-example.xlsx הוא מאגר סינתטי עם קשרים, אנשים, השאלה פתוחה/סגורה ומקור מידע; public/templates/Books-template.xlsx הוא תבנית פשוטה עם שורת דוגמה שמוחקים לפני ייבוא. הם נוצרים דרך אותו מנגנון המוצר ונבדקים גם ב־CI. אפשר להפיק מחדש במפורש באמצעות GENERATE_XLSX_FIXTURES=1 ובדיקת published full example; CI רגיל אינו כותב אותם.
 
 SheetJS CE 0.20.3, Apache-2.0, נעול דרך ההפצה הרשמית: [התקנה](https://docs.sheetjs.com/docs/getting-started/installation/nodejs/), [טיפוסי תאים](https://docs.sheetjs.com/docs/csf/cell/), [אבטחה](https://docs.sheetjs.com/docs/miscellany/security/). קובץ LICENSE בחבילה נבדק. [תאימות DecompressionStream](https://github.com/mdn/browser-compat-data/blob/main/api/DecompressionStream.json). אין שימוש בגרסת registry הישנה או בתכונות Pro בתשלום.
+
+## Goodreads — template 4
+
+גרסה 4 שומרת provider=goodreads ואת מקור שם הסדרה ומספרה בתוך MetadataSources, עם השיוך הרגיל ב־Books/Series. בהשוואת שינויים ידניים שם הסדרה נקרא מהישות המשויכת, ולא משדה חסר בספר. גרסאות 1–3 ודוגמאותיהן ממשיכות להיקרא. מפתח הגישה אינו מיוצא.

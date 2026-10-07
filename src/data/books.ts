@@ -10,7 +10,7 @@ export interface BookInput {
   isbn: string; danacode: string; publisher: string; publicationYear: string;
   edition: string; volume: string; language: string; pages: string; personalNotes: string;
   price?: string; genreNames?: string[]; rating?: number | null; shelfIds?: string[]; genreIds?: string[]; tagIds?: string[]; seriesId?: string | null; seriesNumber?: string;
-  publicationDate?: string; binding?: string; authorParts?: ({ givenName: string; familyName: string } | null)[];
+  publicationDate?: string; binding?: string; seriesName?: string; authorParts?: ({ givenName: string; familyName: string } | null)[];
 }
 export const emptyInput: BookInput = { title: '', subtitle: '', authors: [], readStatus: 'unread', isbn: '', danacode: '', publisher: '', publicationYear: '', edition: '', volume: '', language: '', pages: '', personalNotes: '' };
 const fail = (message: string): never => { throw new LibraryValidationError(message); };
@@ -64,6 +64,11 @@ export async function saveBook(database: LibraryDatabase, input: BookInput, exis
     if (existing && (!current || current.revision !== existing.revision)) return fail('הספר השתנה בחלון אחר. סגור ופתח אותו מחדש לפני העריכה.');
     if (!allowDuplicate && (await duplicateBooks(database, input, existing?.id)).length) return fail('ISBN זה כבר נמצא בספרייה. בחר כיצד להמשיך.');
     const classification = { genreIds: input.genreIds === undefined ? current?.genreIds ?? [] : input.genreIds, tagIds: input.tagIds === undefined ? current?.tagIds ?? [] : input.tagIds, seriesId: input.seriesId === undefined ? current?.seriesId ?? null : input.seriesId, seriesNumber: current?.seriesNumber ?? null };
+    if (input.seriesName !== undefined) {
+      if (typeof input.seriesName !== 'string' || !input.seriesName.trim() || input.seriesName.length > 120) return fail('שם הסדרה אינו תקין.');
+      const series = await database.series.where('normalizedName').equals(normalizeText(input.seriesName)).first() ?? await saveNamedItem(database, 'series', input.seriesName);
+      classification.seriesId = series.id;
+    }
     if (input.genreNames !== undefined) {
       if (!Array.isArray(input.genreNames) || input.genreNames.length > 20 || input.genreNames.some(name => typeof name !== 'string' || name.length > 120)) return fail('רשימת הז׳אנרים אינה תקינה.');
       classification.genreIds = [];
@@ -110,7 +115,7 @@ export async function saveBook(database: LibraryDatabase, input: BookInput, exis
       const previousNames = (await database.authors.bulkGet(current.authorIds)).map(author => author!.displayName);
       const sources = await database.metadataSources.where('bookId').equals(book.id).toArray();
       for (const source of sources) {
-        const changed = source.selectedFields.filter(field => field === 'authors' ? JSON.stringify(previousNames) !== JSON.stringify(names) : current[field] !== book[field]);
+        const changed = source.selectedFields.filter(field => field === 'authors' ? JSON.stringify(previousNames) !== JSON.stringify(names) : field === 'seriesName' ? current.seriesId !== book.seriesId : current[field] !== book[field]);
         if (changed.length) await database.metadataSources.update(source.id, { userOverriddenFields: [...new Set([...source.userOverriddenFields, ...changed])] });
       }
     }

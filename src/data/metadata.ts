@@ -5,8 +5,8 @@ import { comparableISBN, parseISBN } from './books';
 import { validDay } from './loans';
 import { recognitionModels, recognitionVersion, recognitionValues, shelfRecognitionVersion, validateRecognition } from './recognition';
 
-export const metadataFields: MetadataField[] = ['title', 'subtitle', 'authors', 'isbn10', 'isbn13', 'danacode', 'publisher', 'publicationYear', 'publicationDate', 'binding', 'edition', 'volume', 'language', 'pages'];
-export const providerNames = { openlibrary: 'Open Library', googlebooks: 'Google Books', nli: 'הספרייה הלאומית' } as const;
+export const metadataFields: MetadataField[] = ['title', 'subtitle', 'authors', 'isbn10', 'isbn13', 'danacode', 'publisher', 'publicationYear', 'publicationDate', 'binding', 'edition', 'volume', 'language', 'pages', 'seriesName', 'seriesNumber'];
+export const providerNames = { openlibrary: 'Open Library', googlebooks: 'Google Books', nli: 'הספרייה הלאומית', goodreads: 'Goodreads' } as const;
 export type Provider = keyof typeof providerNames;
 export type FieldValues = MetadataSource['fieldValues'];
 export interface Candidate { provider: Provider; recordId: string; sourceUrl: string | null; fetchedAt: string; kind: 'work' | 'edition' | 'volume'; fields: FieldValues; warnings: string[]; coverUrl?: string; genres?: string[] }
@@ -17,9 +17,10 @@ export const isProvider = (value: unknown): value is Provider => typeof value ==
 export function safeSourceUrl(value: unknown): value is string | null {
   if (value === null) return true;
   if (typeof value !== 'string' || value.length > 1000) return false;
-  try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password && !url.port && !url.hash && ['openlibrary.org', 'books.google.com', 'www.nli.org.il'].includes(url.hostname) && ![...url.searchParams.keys()].some(key => /key|token|secret/i.test(key)); } catch { return false; }
+  try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password && !url.port && !url.hash && ['openlibrary.org', 'books.google.com', 'www.nli.org.il', 'www.goodreads.com'].includes(url.hostname) && ![...url.searchParams.keys()].some(key => /key|token|secret/i.test(key)); } catch { return false; }
 }
-function matchesProvider(provider: Provider, value: string | null): boolean {
+function matchesProvider(provider: Provider, value: string | null, recordId: string): boolean {
+  if (provider === 'goodreads') return /^[1-9]\d{0,13}$/.test(recordId) && value === 'https://www.goodreads.com/book/show/' + recordId;
   return value === null || new URL(value).hostname === ({ openlibrary: 'openlibrary.org', googlebooks: 'books.google.com', nli: 'www.nli.org.il' })[provider];
 }
 export function validateFieldValues(value: unknown): FieldValues {
@@ -28,10 +29,12 @@ export function validateFieldValues(value: unknown): FieldValues {
     if (!metadataFields.includes(key as MetadataField)) return fail();
     if (item === null) continue;
     if (key === 'authors') { if (!Array.isArray(item) || item.length > 20 || item.some(name => typeof name !== 'string' || !name.trim() || name.length > 1000)) return fail(); }
+    else if (key === 'seriesNumber') { if (typeof item !== 'number' || !Number.isFinite(item) || item < 0 || item > 1000000) return fail(); }
     else if (key === 'publicationYear' || key === 'pages') { if (typeof item !== 'number' || !Number.isInteger(item) || item < 1 || item > (key === 'pages' ? 100000 : 9999)) return fail(); }
     else if (typeof item !== 'string' || !item.trim() || item.length > 1000) return fail();
     if ((key === 'isbn10' || key === 'isbn13') && parseISBN(item as string)[key] !== item) return fail();
     if (key === 'publicationDate' && !validDay(item)) return fail();
+    if (key === 'seriesName' && typeof item === 'string' && item.length > 120) return fail();
   }
   if (fields.isbn10 && fields.isbn13 && comparableISBN({ isbn10: fields.isbn10 as string, isbn13: null }) !== fields.isbn13) return fail();
   return fields as FieldValues;
@@ -42,7 +45,7 @@ export function validateCandidate(value: unknown): Candidate {
   if (Object.hasOwn(row, 'coverUrl') && !safeCatalogCoverUrl(row.coverUrl, row.provider as string)) return fail();
   if (Object.hasOwn(row, 'genres') && (!Array.isArray(row.genres) || row.genres.length > 20 || row.genres.some(name => typeof name !== 'string' || !name.trim() || name.length > 120))) return fail();
   validateFieldValues(row.fields);
-  if (!matchesProvider(row.provider, row.sourceUrl)) return fail();
+  if (!matchesProvider(row.provider, row.sourceUrl, row.recordId)) return fail();
   if (row.kind === 'work' && ['isbn10', 'isbn13', 'publicationYear', 'publicationDate', 'binding', 'pages', 'publisher', 'edition', 'volume'].some(key => (row.fields as FieldValues)[key as MetadataField] != null)) return fail();
   return row as unknown as Candidate;
 }
@@ -58,7 +61,7 @@ export function validateMetadataSource(value: unknown): MetadataSource {
     if (row.provider !== (evidence.model === recognitionModels.groq ? 'groq' : evidence.model === recognitionModels.ocr ? 'ocr' : 'gemini')) return fail();
     const item = validateRecognition({ items: [evidence.item] }).items[0], expected = recognitionValues(item);
     if (Object.keys(expected).length !== Object.keys(fields).length || metadataFields.some(field => JSON.stringify(expected[field]) !== JSON.stringify(fields[field]))) return fail();
-  } else if (!matchesProvider(row.provider as Provider, row.sourceUrl)) return fail();
+  } else if (!matchesProvider(row.provider as Provider, row.sourceUrl, row.recordId)) return fail();
   for (const key of ['selectedFields', 'userOverriddenFields']) {
     const selected = row[key];
     if (!Array.isArray(selected) || selected.length > metadataFields.length || new Set(selected).size !== selected.length || selected.some(field => !metadataFields.includes(field) || !Object.hasOwn(fields, field) || fields[field as MetadataField] == null)) return fail();

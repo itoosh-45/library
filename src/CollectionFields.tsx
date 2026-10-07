@@ -16,17 +16,16 @@ export function CollectionFields({ bookId, input, onChange, onBusyChange }: { bo
   return <details className="classification"><summary>מדפים, תגיות וסדרה</summary>
     <fieldset className="choices"><legend>שיוך למדפים</legend>{!data.shelves.length && <p className="hint">אפשר ליצור מדף במסך המדפים ולבחור אותו כאן.</p>}{shelfRows(data.shelves).map(({ shelf, depth, path }) => <label className="check" key={shelf.id} title={path}><input type="checkbox" checked={ids.includes(shelf.id)} onChange={event => toggle('shelfIds', shelf.id, event.target.checked)} /><span>{depth > 0 ? `רמה ${depth + 1}: ` : ''}{shelf.name}</span></label>)}</fieldset>
     {(['genres', 'tags'] as const).map(kind => <fieldset className="choices" key={kind}><legend>{collectionLabels[kind]}</legend>{data[kind].map(item => <label className="check" key={item.id}><input type="checkbox" checked={(input[kind === 'tags' ? 'tagIds' : 'genreIds'] ?? []).includes(item.id)} onChange={event => toggle(kind === 'tags' ? 'tagIds' : 'genreIds', item.id, event.target.checked)} /><span>{item.name}</span></label>)}<QuickCollection kind={kind} onBusyChange={onBusyChange} onCreated={id => toggle(kind === 'tags' ? 'tagIds' : 'genreIds', id, true)} /></fieldset>)}
-    <label className="field">סדרה<select aria-label="סדרה" value={input.seriesId ?? ''} onChange={event => onChange({ ...input, seriesId: event.target.value || null, seriesNumber: event.target.value ? input.seriesNumber : '' })}><option value="">ללא סדרה</option>{data.series.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-    <QuickCollection kind="series" onBusyChange={onBusyChange} onCreated={id => onChange({ ...input, seriesId: id })} />
-    <label className="field">מספר בסדרה<input inputMode="decimal" disabled={!input.seriesId} value={input.seriesNumber ?? ''} maxLength={20} onChange={event => onChange({ ...input, seriesNumber: event.target.value })} /></label><p className="hint">מספר חסר מופיע בסוף הסדרה ומסומן במפורש.</p>
+    <SeriesFields input={input} onChange={onChange} onBusyChange={onBusyChange} />
   </details>;
 }
 export function SeriesFields({ input, onChange, onBusyChange }: { input: BookInput; onChange: (input: BookInput) => void; onBusyChange: (busy: boolean) => void }) {
   const series = useLiveQuery(() => db.series.toArray()) ?? [];
   return <section className="series-fields">
-    <label className="field">סדרה<select aria-label="סדרה" value={input.seriesId ?? ''} onChange={event => onChange({ ...input, seriesId: event.target.value || null, seriesNumber: event.target.value ? input.seriesNumber : '' })}><option value="">ללא סדרה</option>{series.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-    <QuickCollection kind="series" onBusyChange={onBusyChange} onCreated={id => onChange({ ...input, seriesId: id })} />
-    <label className="field">מספר בסדרה<input inputMode="decimal" disabled={!input.seriesId} value={input.seriesNumber ?? ''} maxLength={20} onChange={event => onChange({ ...input, seriesNumber: event.target.value })} /></label>
+    <label className="field">סדרה<select aria-label="סדרה" value={input.seriesName !== undefined ? '__catalog__' : input.seriesId ?? ''} onChange={event => onChange({ ...input, seriesName: undefined, seriesId: event.target.value || null, seriesNumber: event.target.value ? input.seriesNumber : '' })}><option value="">ללא סדרה</option>{input.seriesName !== undefined && <option value="__catalog__">{input.seriesName}</option>}{series.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+    {input.seriesName !== undefined && <label className="field">סדרה מהקטלוג<input value={input.seriesName} maxLength={120} onChange={event => onChange({ ...input, seriesName: event.target.value })} /></label>}
+    <QuickCollection kind="series" onBusyChange={onBusyChange} onCreated={id => onChange({ ...input, seriesName: undefined, seriesId: id })} />
+    <label className="field">מספר בסדרה<input inputMode="decimal" disabled={!input.seriesId && !input.seriesName} value={input.seriesNumber ?? ''} maxLength={20} onChange={event => onChange({ ...input, seriesNumber: event.target.value })} /></label>
   </section>;
 }
 export function TagField({ input, onChange }: { input: BookInput; onChange: (input: BookInput) => void }) {

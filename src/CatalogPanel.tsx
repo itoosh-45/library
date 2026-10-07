@@ -12,8 +12,9 @@ import type { MetadataField, StoredImage } from './data/models';
 import type { BookInput } from './data/books';
 import { errorMessage } from './data/errors';
 import { gatewayAdapter } from './data/catalogGateway';
+import { goodreadsAdapter, goodreadsConfigured } from './data/goodreads';
 
-const fieldLabels: Record<MetadataField, string> = { title: 'שם הספר', subtitle: 'כותרת משנה', authors: 'מחברים', isbn10: 'ISBN-10', isbn13: 'ISBN-13', danacode: 'דאנאקוד', publisher: 'הוצאה לאור', publicationYear: 'שנת הוצאה', publicationDate: 'תאריך פרסום', binding: 'סוג כריכה', edition: 'מהדורה', volume: 'כרך', language: 'שפה', pages: 'מספר עמודים' };
+const fieldLabels: Record<MetadataField, string> = { title: 'שם הספר', subtitle: 'כותרת משנה', authors: 'מחברים', isbn10: 'ISBN-10', isbn13: 'ISBN-13', danacode: 'דאנאקוד', publisher: 'הוצאה לאור', publicationYear: 'שנת הוצאה', publicationDate: 'תאריך פרסום', binding: 'סוג כריכה', edition: 'מהדורה', volume: 'כרך', language: 'שפה', pages: 'מספר עמודים', seriesName: 'סדרה', seriesNumber: 'מספר בסדרה' };
 const openLibrary = openLibraryAdapter();
 function serverAdapter(provider: 'nli' | 'googlebooks') {
   const origin = import.meta.env.VITE_CATALOG_GATEWAY;
@@ -51,7 +52,7 @@ export function CatalogPanel({ input, disabled, onApply, autoOpen = false, autoS
   const [query, setQuery] = useState<CatalogQuery>(() => autoSearch ? { ...emptyQuery, ...(searchBy === 'identifier' && (input.isbn || input.danacode) ? { isbn: input.isbn, danacode: input.danacode } : { title: input.title, author: input.authors.filter(Boolean).join(' ') }) } : ({ ...emptyQuery, title: input.title, author: input.authors.filter(Boolean).join(' '), publisher: input.publisher, year: input.publicationYear, isbn: input.isbn, danacode: input.danacode }));
   const [results, setResults] = useState<ProviderResult[]>([]), [searching, setSearching] = useState(false), [error, setError] = useState('');
   const [resolving, setResolving] = useState(false), [appliedMessage, setAppliedMessage] = useState('');
-  const [adapter] = useState(() => openLibrary), [search] = useState(() => new CatalogSearch(db, [adapter, ...serverAdapters]));
+  const [adapter] = useState(() => openLibrary), [adapters] = useState(() => [openLibrary, ...serverAdapters, ...(goodreadsConfigured() ? [goodreadsAdapter()] : [])]), [search] = useState(() => new CatalogSearch(db, adapters));
   const request = useRef(0), resolveRequest = useRef<AbortController | undefined>(undefined);
   useEffect(() => { onBusy?.(resolving); }, [onBusy, resolving]);
   useEffect(() => () => { search.cancel(); resolveRequest.current?.abort(); request.current++; }, [search]);
@@ -67,9 +68,10 @@ export function CatalogPanel({ input, disabled, onApply, autoOpen = false, autoS
     if (!navigator.onLine) { setError('טעינת מועמד דורשת חיבור לרשת.'); return; }
     resolveRequest.current?.abort(); const controller = new AbortController(); resolveRequest.current = controller;
     setResolving(true); setAppliedMessage(''); setError('');
-    const timer = setTimeout(() => controller.abort(), 15000);
+    const timer = setTimeout(() => controller.abort(), 30000);
     try {
-      const resolved = value.provider === 'openlibrary' && adapter.resolve ? await adapter.resolve(value, controller.signal) : value;
+      const source = adapters.find(item => item.provider === value.provider);
+      const resolved = source?.resolve ? await source.resolve(value, controller.signal) : value;
       if (controller.signal.aborted) return;
       const { draft, fields } = applyCatalogCandidate(input, resolved);
       let cover: StoredImage | undefined, message = 'כל הפרטים הזמינים הועברו לטיוטה. אפשר לערוך לפני שמירת הספר.';
@@ -91,7 +93,7 @@ export function CatalogPanel({ input, disabled, onApply, autoOpen = false, autoS
   return <details data-update-blocked={searching || resolving} className="catalog-panel" open={autoOpen || undefined}><summary>{simple ? 'חיפוש ספר' : 'חיפוש והשלמה מקטלוגים'}</summary>{!online && <p role="status">החיפוש דורש חיבור לרשת.</p>}{simple ? <label className="field">שם ספר, דאנאקוד או ISBN<input value={query.isbn || query.danacode || query.title} maxLength={300} disabled={disabled} onChange={event => { const value = event.target.value; setQuery({ ...emptyQuery, ...(/^[\d -]+$/.test(value) && value.trim() ? (/^97[89][\d -]+$/.test(value) ? { isbn: value } : { danacode: value }) : { title: value, author: query.author }) }); }} /></label> : <><p className="hint">בחירת תוצאה מעבירה את כל הפרטים הזמינים לטיוטה.</p><div className="field-grid">{Object.entries(labels).map(([key, label]) => <label className="field" key={key}>{label}<input maxLength={300} value={query[key as keyof CatalogQuery]} disabled={disabled} onChange={event => setQuery({ ...query, [key]: event.target.value })} /></label>)}</div></>}{simple && <label className="field">מחבר לחיפוש<input value={query.author} maxLength={300} disabled={disabled} onChange={event => setQuery({ ...query, author: event.target.value })} /></label>}<div className="actions"><button type="button" disabled={disabled || !online} onClick={() => void run()}>חיפוש בקטלוגים</button>{(searching || resolving) && <button type="button" className="secondary" onClick={() => { search.cancel(); resolveRequest.current?.abort(); request.current++; setSearching(false); setResolving(false); }}>ביטול החיפוש</button>}{!simple && <button type="button" className="secondary" disabled={disabled || searching || resolving} onClick={async () => { try { await db.metadataCache.clear(); setResults([]); setError('מטמון החיפוש נמחק.'); } catch (error) { setError(errorMessage(error)); } }}>ניקוי תוצאות שמורות</button>}</div>
     {query.danacode && <p>דאנאקוד נשמר כפי שהוזן. <a href={'https://www.nli.org.il/he/search?projectName=NLI#&q=any,contains,' + encodeURIComponent(query.danacode) + '&bulkSize=30&index=0&sort=rank&t=allresults&mode=basic'} target="_blank" rel="noopener noreferrer">פתיחת חיפוש ידני בספרייה הלאומית</a></p>}
     <p role="status" aria-live="polite">{searching ? 'מחפש בקטלוגים…' : resolving ? 'טוען פרטי מהדורה…' : ''}</p><p role="alert" className="error-message">{error}</p>
-    <div className="catalog-results">{results.filter(result => !simple || result.provider === 'openlibrary' || result.state !== 'unavailable').map(result => <section key={result.provider}><h3>{providerNames[result.provider]}</h3><p role="status">{result.message}</p>{result.candidates.map(item => <article className="candidate" key={item.recordId}><CatalogCoverPreview candidate={item} adapter={item.provider === 'openlibrary' ? adapter : serverAdapters.find(value=>value.provider===item.provider)!} /><div className="catalog-candidate-details"><h4>{item.fields.title ?? 'ללא שם'}</h4><p>{item.kind === 'work' ? 'יצירה כללית · מהדורה לא מאומתת' : 'מהדורה מוצעת · בדוק מול העותק'}</p>{item.fields.authors && <p>{(item.fields.authors as string[]).join(' · ')}</p>}<button type="button" className="secondary" disabled={disabled || resolving || !online} onClick={() => void choose(item)}>בחירת מועמד {item.fields.title ?? 'ללא שם'}</button></div></article>)}</section>)}</div>
+    <div className="catalog-results">{results.filter(result => !simple || result.provider === 'openlibrary' || result.provider === 'goodreads' || result.state !== 'unavailable').map(result => <section key={result.provider}><h3>{providerNames[result.provider]}</h3><p role="status">{result.message}</p>{result.candidates.map(item => <article className="candidate" key={item.recordId}><CatalogCoverPreview candidate={item} adapter={adapters.find(value=>value.provider===item.provider) ?? adapter} /><div className="catalog-candidate-details"><h4>{item.fields.title ?? (item.provider === 'goodreads' ? 'מהדורת Goodreads ' + item.recordId : 'ללא שם')}</h4><p>{item.kind === 'work' ? 'יצירה כללית · מהדורה לא מאומתת' : 'מהדורה מוצעת · בדוק מול העותק'}</p>{item.fields.authors && <p>{(item.fields.authors as string[]).join(' · ')}</p>}<button type="button" className="secondary" disabled={disabled || resolving || !online} onClick={() => void choose(item)}>בחירת מועמד {item.fields.title ?? (item.provider === 'goodreads' ? 'מהדורת Goodreads ' + item.recordId : 'ללא שם')}</button></div></article>)}</section>)}</div>
     {appliedMessage && <p className="notice" role="status">{appliedMessage}</p>}
 
   </details>;

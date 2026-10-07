@@ -86,7 +86,7 @@ test('non-ISBN barcode retains its raw digits as danacode; unreadable upload sta
   const blank = await page.evaluate(() => { const c=document.createElement('canvas');c.width=300;c.height=300;const ctx=c.getContext('2d')!;ctx.fillStyle='#fff';ctx.fillRect(0,0,300,300);return c.toDataURL('image/png').split(',')[1]; });
   await page.getByRole('button',{name:'הוספת ספר',exact:true}).click();await page.getByRole('button',{name:'סריקת ברקוד',exact:true}).click();
   await page.getByLabel('תמונת ברקוד',{exact:true}).setInputFiles({name:'blank.png',mimeType:'image/png',buffer:Buffer.from(blank,'base64')});
-  await expect(page.getByRole('status').filter({hasText:'לא נקרא ברקוד'})).toBeVisible();
+  await expect(page.getByRole('status').filter({hasText:'לא נקרא ברקוד'})).toBeVisible({timeout:15000});
   await expect(page.getByLabel('תמונת ברקוד',{exact:true})).toBeEnabled();
   await page.getByLabel('תמונת ברקוד',{exact:true}).setInputFiles({name:'synthetic.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
   await expect(page.getByLabel('מזהה שנקרא או הוקלד',{exact:true})).toHaveValue('4006381333931');

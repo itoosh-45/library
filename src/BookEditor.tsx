@@ -76,7 +76,7 @@ export function BookEditor({ book, authorNames, authorRecords, onClose, onOpen, 
   const [catalogSearchKind, setCatalogSearchKind] = useState<'identifier' | 'details'>('identifier');
   const [catalogAutoSearch, setCatalogAutoSearch] = useState(false), [catalogOpen, setCatalogOpen] = useState(startWith === 'catalog');
   const copies = useLiveQuery(() => book ? db.copies.where('bookId').equals(book.id).toArray() : [], [book?.id]) ?? [];
-  function field(key: Exclude<keyof BookInput, 'authors' | 'authorParts' | 'readStatus' | 'shelfIds' | 'genreIds' | 'tagIds' | 'seriesId' | 'seriesNumber' | 'rating' | 'genreNames'>, label: string, numeric = false) {
+  function field(key: Exclude<keyof BookInput, 'authors' | 'authorParts' | 'readStatus' | 'shelfIds' | 'genreIds' | 'tagIds' | 'seriesId' | 'seriesName' | 'seriesNumber' | 'rating' | 'genreNames'>, label: string, numeric = false) {
     return <label className="field">{label}<input value={input[key] ?? ''} inputMode={numeric ? 'numeric' : undefined} maxLength={key === 'personalNotes' ? 20000 : 1000} onChange={event => { setInput({ ...input, [key]: event.target.value }); setDirty(true); setDuplicates([]); }} /></label>;
   }
   async function save(event?: FormEvent, allowDuplicate = false) {

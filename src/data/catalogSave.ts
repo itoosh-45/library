@@ -9,13 +9,14 @@ import { recognitionModels, recognitionInput, recognitionMetadataFields, recogni
 export function inputFieldValue(input: BookInput, field: MetadataField): FieldValues[MetadataField] {
   if (field === 'authors') return input.authors.map(name => name.trim()).filter(Boolean);
   if (field === 'isbn10' || field === 'isbn13') return input.isbn.replace(/[\s-]/g, '').toUpperCase() || null;
-  if (field === 'publicationYear' || field === 'pages') return input[field].trim() ? +input[field] : null;
+  if (field === 'publicationYear' || field === 'pages' || field === 'seriesNumber') return input[field]?.trim() ? +input[field]! : null;
   return input[field]?.trim() || null;
 }
 export function applyCatalogCandidate(input: BookInput, candidate: Candidate) {
   validateCandidate(candidate);
   const fields = metadataFields.filter(field => candidate.fields[field] != null && !(field === 'isbn10' && candidate.fields.isbn13));
   const draft = { ...input, ...(candidate.genres?.length ? { genreNames: [...candidate.genres] } : {}) };
+  if (candidate.fields.seriesName) { draft.seriesId = null; draft.seriesNumber = ''; }
   for (const field of fields) {
     const value = candidate.fields[field];
     if (field === 'authors') { draft.authors = [...value as string[]]; delete draft.authorParts; }

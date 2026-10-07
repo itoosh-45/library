@@ -37,7 +37,7 @@ function addSheet(workbook: XLSX.WorkBook, name: string, headers: string[], rows
 export function fullWorkbook(core: Core): XLSX.WorkBook {
   const workbook = XLSX.utils.book_new();
   const manifest: Row[] = [
-    { key: 'format', value: 'my-library-xlsx' }, { key: 'templateVersion', value: '3' }, { key: 'dbSchemaVersion', value: '2' },
+    { key: 'format', value: 'my-library-xlsx' }, { key: 'templateVersion', value: '4' }, { key: 'dbSchemaVersion', value: '2' },
     { key: 'libraryId', value: core.settings.find(row => row.key === 'libraryId')!.value }, { key: 'exportedAt', value: new Date().toISOString() },
     { key: 'instructions', value: 'שורה 1 היא כותרת; אין לשנות IDs וקשרים ללא התאמה בכל הגיליונות. ריק משמעו null. תאריכים הם ISO; מחיר ביחידות קטנות. אין נוסחאות.' },
     { key: 'images', value: 'ImageRefs הם הפניות בלבד, ללא קובצי תמונה. JSON הוא הגיבוי המלא. טיוטות צילום מדף אינן נכללות.' },
@@ -154,7 +154,7 @@ export async function fullWorkbookCandidate(database: LibraryDatabase, input: Re
   if (!input.full) return workbookError('Manifest', 0, 'format', 'זה אינו template מלא');
   const manifest = sheetRows(input.workbook, 'Manifest', Object.fromEntries(manifestColumns.map(key => [key, 'text'])));
   const values = new Map(manifest.filter(row => row.key !== null).map(row => [row.key, row.value]));
-  if (values.get('format') !== 'my-library-xlsx' || !['1','2','3'].includes(String(values.get('templateVersion'))) || values.get('dbSchemaVersion') !== '2') return workbookError('Manifest', 0, 'templateVersion', 'גרסת template אינה נתמכת');
+  if (values.get('format') !== 'my-library-xlsx' || !['1','2','3','4'].includes(String(values.get('templateVersion'))) || values.get('dbSchemaVersion') !== '2') return workbookError('Manifest', 0, 'templateVersion', 'גרסת template אינה נתמכת');
   const activeSchema = values.get('templateVersion') === '1' ? legacyWorkbookSchema : values.get('templateVersion') === '2' ? version2WorkbookSchema : workbookSchema;
   const tables = Object.fromEntries(Object.entries(activeSchema).map(([name, schema]) => [schema.table, sheetRows(input.workbook, name, schema.columns)])) as Record<string, Row[]>;
   for (const [name, schema] of Object.entries(activeSchema)) for (const [index, row] of tables[schema.table].entries()) for (const [key, value] of Object.entries(row)) {
@@ -227,7 +227,7 @@ export async function fullWorkbookCandidate(database: LibraryDatabase, input: Re
     const book = books.get(row.bookId)!;
     const names = new Map(tables.authors.map(author => [author.id, author.displayName]));
     for (const field of source.selectedFields) {
-      const actual = field === 'authors' ? (book.authorIds as string[]).map(id => names.get(id)) : book[field];
+      const actual = field === 'authors' ? (book.authorIds as string[]).map(id => names.get(id)) : field === 'seriesName' ? tables.series.find(series => series.id === book.seriesId)?.name ?? null : book[field];
       if (JSON.stringify(actual) !== JSON.stringify(source.fieldValues[field]) && !source.userOverriddenFields.includes(field)) source.userOverriddenFields.push(field);
     }
   }

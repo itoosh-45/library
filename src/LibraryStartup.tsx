@@ -4,6 +4,7 @@ import { ErrorBoundary, StorageError } from './StorageError';
 import { db, initializeLibrary } from './data/database';
 import { watchDatabaseConnection, type ConnectionNotice } from './data/databaseLifecycle';
 import { restoreVisionKey } from './data/visionCredentials';
+import { restoreGoodreadsKey } from './data/goodreads';
 import { registerOffline } from './pwa';
 
 export function LibraryStartup() {
@@ -20,7 +21,7 @@ export function LibraryStartup() {
   useEffect(() => {
     let stopped = false;
     const unwatch = watchDatabaseConnection(db, next => { if (!stopped) setNotice(next); });
-    void Promise.all([initializeLibrary(db), restoreVisionKey()]).then(() => {
+    void Promise.all([initializeLibrary(db), restoreVisionKey(), restoreGoodreadsKey()]).then(() => {
       if (stopped || cancelled.current || db.upgradePending) return;
       setReady(true); setNotice(undefined);
       void registerOffline()?.catch(() => {});

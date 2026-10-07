@@ -1,12 +1,6 @@
-import Dexie, { type Table } from 'dexie';
+import { personalCredentials as credentials } from './personalCredentials';
 import { normalizeVisionKey, geminiQuotaDay, geminiVisionSession, groqVisionSession } from './vision';
 
-interface Credential { id: string; key?: string; free?: boolean; consent?: boolean; stopped?: boolean; stoppedDay?: string }
-class CredentialDatabase extends Dexie {
-  credentials!: Table<Credential, string>;
-  constructor() { super('itoosh-45.library.credentials.v1'); this.version(1).stores({ credentials: 'id' }); }
-}
-const credentials = new CredentialDatabase();
 export async function rememberVisionKey(key: string, free: boolean, consent: boolean) {
   key = normalizeVisionKey(key);
   if (!free || !consent) throw new Error('נדרש אישור Free והסכמה לשליחת תמונה.');

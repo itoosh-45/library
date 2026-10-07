@@ -11,6 +11,10 @@ export function safeCatalogCoverUrl(value: unknown, provider?: string): value is
       const allowed = ['id', 'printsec', 'img', 'zoom', 'source', 'jscmd', 'h', 'w', 'edge'];
       return url.pathname === '/books/content' && /^[\w-]{1,100}$/.test(url.searchParams.get('id') ?? '') && [...url.searchParams.keys()].every(key => allowed.includes(key));
     }
+    if ((!provider || provider === 'goodreads') && ['m.media-amazon.com', 'images-na.ssl-images-amazon.com', 'i.gr-assets.com', 'images.gr-assets.com', 's.gr-assets.com'].includes(url.hostname)) {
+      if (['m.media-amazon.com', 'images-na.ssl-images-amazon.com'].includes(url.hostname) && !url.pathname.startsWith('/images/S/compressed.photo.goodreads.com/')) return false;
+      return !url.search && /^\/(?:images\/S\/compressed\.photo\.goodreads\.com\/)?books\/[\w./-]+\.(?:jpg|png|webp)$/.test(url.pathname);
+    }
     return false;
   } catch { return false; }
 }

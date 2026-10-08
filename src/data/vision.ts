@@ -1,4 +1,4 @@
-import { normalizeVisionKey, VisionError, type VisionState, type VisionOutcome, type VisionFailure } from './visionTypes';
+import { normalizeVisionKey, VisionError, type VisionState, type VisionOutcome, type VisionFailure, type VisionDiagnostic } from './visionTypes';
 export { normalizeVisionKey, VisionError, visionFailureMessage, type VisionState, type VisionOutcome, type VisionFailure } from './visionTypes';
 import { GroqVisionSession } from './groqVision';
 import { imageSignature } from './images';
@@ -6,14 +6,14 @@ import { recognitionModels, recognitionPrompt, recognitionSchema, shelfRecogniti
 
 export const geminiQuotaDay = () => new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 export const visionModels = recognitionModels;
-const error = (state: VisionState, message: string, status?: number): never => { throw new VisionError(state, message, status); };
+const error = (state: VisionState, message: string, status?: number, diagnostic?: VisionDiagnostic): never => { throw new VisionError(state, message, status, diagnostic); };
 async function responseValue(response: Response, key: string): Promise<Record<string, unknown>> {
   if (!response.body) return error('invalid', 'תגובת הזיהוי ריקה.');
   const reader = response.body.getReader(), decoder = new TextDecoder(); let length = 0, value = '';
   try {
     for (;;) { const part = await reader.read(); if (part.done) break; length += part.value.byteLength; if (length > 128 * 1024) return error('invalid', 'תגובת הזיהוי גדולה מדי.'); value += decoder.decode(part.value, { stream: true }); }
-    value += decoder.decode(); if (value.includes(key)) return error('invalid', 'תגובת הזיהוי נדחתה מטעמי פרטיות.');
-    const parsed: unknown = JSON.parse(value); if (JSON.stringify(parsed).includes(key)) return error('invalid', 'תגובת הזיהוי נדחתה מטעמי פרטיות.'); if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return error('invalid', 'תגובת הזיהוי אינה תקינה.'); return parsed as Record<string, unknown>;
+    value += decoder.decode(); if (value.includes(key)) return error('invalid', 'תגובת הזיהוי נדחתה מטעמי פרטיות.', undefined, 'privacy');
+    const parsed: unknown = JSON.parse(value); if (JSON.stringify(parsed).includes(key)) return error('invalid', 'תגובת הזיהוי נדחתה מטעמי פרטיות.', undefined, 'privacy'); if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return error('invalid', 'תגובת הזיהוי אינה תקינה.', undefined, 'shape'); return parsed as Record<string, unknown>;
   } finally { await reader.cancel().catch(() => {}); }
 }
 async function jpegBase64(blob: Blob): Promise<string> {
@@ -68,14 +68,35 @@ export class VisionSession {
           if ([404, 500, 502, 503, 504].includes(response.status) && index < models.length - 1) { onBackup(`Gemini החזיר HTTP ${response.status}; מנסה את ${models[index + 1]}.`); continue; }
           return error('unavailable', 'שירות הזיהוי אינו זמין. אפשר להוסיף ידנית; לא בוצע ניסיון נוסף.', response.status);
         }
-        const root = await responseValue(response, key); if (controller.signal.aborted || sequence !== this.#sequence) throw cancelled();
-        if (!Array.isArray(root.candidates) || root.candidates.length !== 1) return error('invalid', 'הספק לא החזיר תוצאת זיהוי יחידה.');
-        const candidate = root.candidates[0] as { finishReason?: unknown; content?: { parts?: { text?: unknown; thought?: boolean }[] } };
-        if (candidate?.finishReason !== 'STOP' || !Array.isArray(candidate?.content?.parts)) return error('invalid', 'הספק לא השלים זיהוי תקין.');
-        const parts = candidate.content.parts.filter(part => !part.thought); if (!parts.length || parts.some(part => typeof part.text !== 'string')) return error('invalid', 'תוצאת הזיהוי אינה טקסט תקין.');
-        const extracted: unknown = JSON.parse(parts.map(part => part.text).join('')); if (JSON.stringify(extracted).includes(key)) return error('invalid', 'תגובת הזיהוי נדחתה מטעמי פרטיות.');
-        const result = mode === 'shelf' ? validateShelfRecognition(extracted) : validateRecognition(extracted);
-        return { result, model, usedBackup: index > 0 };
+        try {
+          let root: Record<string, unknown>;
+          try { root = await responseValue(response, key); }
+          catch (cause) { if (cause instanceof SyntaxError) return error('invalid', 'התשובה אינה JSON תקין.', undefined, 'json'); throw cause; }
+          if (controller.signal.aborted || sequence !== this.#sequence) throw cancelled();
+          if (!Array.isArray(root.candidates) || root.candidates.length !== 1) return error('invalid', 'הספק לא החזיר תוצאת זיהוי יחידה.', undefined, root.promptFeedback ? 'safety' : 'shape');
+          const candidate = root.candidates[0] as { finishReason?: unknown; content?: { parts?: { text?: unknown; thought?: boolean }[] } };
+          if (candidate?.finishReason !== 'STOP') return error('invalid', 'הספק לא השלים זיהוי תקין.', undefined, candidate?.finishReason === 'MAX_TOKENS' ? 'truncated' : ['SAFETY','BLOCKLIST','PROHIBITED_CONTENT'].includes(String(candidate?.finishReason)) ? 'safety' : 'incomplete');
+          if (!Array.isArray(candidate?.content?.parts)) return error('invalid', 'בתשובה חסרים פרטי הזיהוי.', undefined, 'shape');
+          if (candidate.content.parts.some(part => !part || typeof part !== 'object')) return error('invalid', 'מבנה חלקי התשובה אינו תקין.', undefined, 'shape');
+          const parts = candidate.content.parts.filter(part => !part.thought);
+          if (!parts.length || parts.some(part => typeof part.text !== 'string')) return error('invalid', 'תוצאת הזיהוי אינה טקסט תקין.', undefined, 'shape');
+          let extracted: unknown;
+          try { extracted = JSON.parse(parts.map(part => part.text).join('')); }
+          catch { return error('invalid', 'התשובה אינה JSON תקין.', undefined, 'json'); }
+          if (JSON.stringify(extracted).includes(key)) return error('invalid', 'תגובת הזיהוי נדחתה מטעמי פרטיות.', undefined, 'privacy');
+          let result;
+          try { result = mode === 'shelf' ? validateShelfRecognition(extracted) : validateRecognition(extracted); }
+          catch { return error('invalid', 'פרטי הספר לא עברו אימות.', undefined, 'validation'); }
+          return { result, model, usedBackup: index > 0 };
+        } catch (cause) {
+          if (!(cause instanceof VisionError) || cause.state !== 'invalid') throw cause;
+          cause.model = model;
+          // Retry a malformed result only on the remaining approved models; keep privacy/content refusals terminal.
+          if (cause.diagnostic && ['json','shape','truncated','incomplete','validation'].includes(cause.diagnostic) && index < models.length - 1) {
+            onBackup(`${model}: ${cause.message} מנסה את ${models[index + 1]}.`); continue;
+          }
+          throw cause;
+        }
       }
       return error('unavailable', 'שירות הזיהוי אינו זמין.');
     };
@@ -101,7 +122,7 @@ export class VisionRouter {
     const current=()=> { if(sequence!==this.#sequence)throw new VisionError('cancelled','הזיהוי בוטל.'); };
     const cloudAllowed=typeof navigator==='undefined'||navigator.onLine !== false;
     if(!localOnly && cloudAllowed) {
-      if(this.gemini.ready) { try { const result=await this.gemini.recognize(blob,onBackup,mode);current();return result; } catch(error) { current();if(error instanceof VisionError && ['cancelled','busy','spending-lock'].includes(error.state))throw error; onFailure?.({ provider: 'Gemini', state: error instanceof VisionError ? error.state : 'invalid', ...(error instanceof VisionError && error.httpStatus ? { httpStatus: error.httpStatus } : {}) }); } }
+      if(this.gemini.ready) { try { const result=await this.gemini.recognize(blob,onBackup,mode);current();return result; } catch(error) { current();if(error instanceof VisionError && ['cancelled','busy','spending-lock'].includes(error.state))throw error; onFailure?.({ provider: 'Gemini', state: error instanceof VisionError ? error.state : 'invalid', ...(error instanceof VisionError && error.httpStatus ? { httpStatus: error.httpStatus } : {}), ...(error instanceof VisionError && error.diagnostic ? { diagnostic: error.diagnostic, model: error.model } : {}) }); } }
       else if(this.gemini.hasKey) onFailure?.({ provider: 'Gemini', state: this.gemini.blockedReason });
       if(this.groq.ready) { current();onBackup('Gemini אינו זמין — עובר לזיהוי דרך Groq.');try {const result=await this.groq.recognize(blob,mode);current();return result;}catch(error){current();if(error instanceof VisionError && ['cancelled','busy','spending-lock'].includes(error.state))throw error; onFailure?.({ provider: 'Groq', state: error instanceof VisionError ? error.state : 'invalid', ...(error instanceof VisionError && error.httpStatus ? { httpStatus: error.httpStatus } : {}) });} }
       else if(this.groq.hasKey) onFailure?.({ provider: 'Groq', state: this.groq.blockedReason });

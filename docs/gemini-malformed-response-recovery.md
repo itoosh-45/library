@@ -1,0 +1,9 @@
+# App 0.25.3: malformed Gemini response recovery
+
+The previous pipeline tried the two approved Gemini backups after selected HTTP service errors, but immediately left Gemini after a successful HTTP response containing malformed JSON, truncated output or book details that failed validation. Such failures were displayed as a generic invalid request/response message without a status code.
+
+Malformed JSON, incomplete/truncated responses, unsupported response shapes and invalid recognition evidence now try each remaining approved Gemini model once, within the existing total deadline. A successful primary still makes one call. HTTP 400/access/quota failures retain their existing stops. Privacy echoes and Gemini content refusals do not trigger another Gemini model. Recognition validation, literal evidence requirements and explicit user review/search/save are unchanged; malformed book data is never applied. If the chain fails, its fixed diagnostic category and final model reach the existing warning box. Raw provider text and credentials are never displayed or persisted.
+
+Five-axis review: correctness covers ordered recovery, exhaustion and terminal privacy/content conditions; readable diagnostics reuse existing VisionError/VisionFailure; architecture retains the router/session and recognition validator; authentication, Free consent, quota and secret handling are unchanged; attempts remain bounded to three approved Gemini models inside one total deadline, followed by the existing configured fallback.
+
+Tests use synthetic images and mocked provider responses. Browser tests prove malformed primary output reaches a valid backup and stays an editable draft. These tests do not prove live recognition accuracy or which internal validation failed on the user's original image. Original screenshots/results remain private. Separate OCR research materials were read; no research images/transcripts are published and no model choice was changed.

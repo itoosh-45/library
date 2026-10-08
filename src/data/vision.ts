@@ -1,3 +1,4 @@
+import { coverTranscriptionPrompt, coverTranscriptionSchema, transcriptionToRecognition } from './coverTranscription';
 import { normalizeVisionKey, VisionError, type VisionState, type VisionOutcome, type VisionFailure, type VisionDiagnostic } from './visionTypes';
 export { normalizeVisionKey, VisionError, visionFailureMessage, type VisionState, type VisionOutcome, type VisionFailure } from './visionTypes';
 import { GroqVisionSession } from './groqVision';
@@ -39,7 +40,7 @@ export class VisionSession {
   get hasKey() { return Boolean(this.#key); }
   get blockedReason(): VisionState { return !this.#key ? 'key' : !this.#freeTierVerified || !this.#consent ? 'spending-lock' : 'quota'; }
   get ready() { return Boolean(this.#key && this.#freeTierVerified && this.#consent && !(this.#quotaStopped && this.#quotaDay===geminiQuotaDay())); }
-  async recognize(blob: Blob, onBackup: (reason?: string) => void, mode: 'single' | 'shelf' = 'single'): Promise<VisionOutcome> {
+  async recognize(blob: Blob, onBackup: (reason?: string) => void, mode: 'single' | 'shelf' | 'cover' = 'single'): Promise<VisionOutcome> {
     if (this.#quotaStopped && this.#quotaDay===geminiQuotaDay()) return error('quota', 'המכסה הסתיימה. הזיהוי נעצר; אין חידוש או רכישת קרדיטים.');
     if (!this.#key) return error('key', 'הגדר מפתח Gemini אישי בהגדרות לפני זיהוי.');
     if (!this.#freeTierVerified || !this.#consent) return error('spending-lock', 'השליחה חסומה עד אימות מסלול ללא חיוב ואישור שליחת התמונה.');
@@ -52,7 +53,7 @@ export class VisionSession {
     const timer = setTimeout(() => { timedOut = true; controller.abort(); }, this.timeoutMilliseconds);
     const run = async (): Promise<VisionOutcome> => {
       const data = await jpegBase64(blob); if (controller.signal.aborted) throw cancelled();
-      const body = JSON.stringify({ systemInstruction: { parts: [{ text: mode === 'shelf' ? shelfRecognitionPrompt : recognitionPrompt }] }, contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/jpeg', data } }] }], generationConfig: { responseMimeType: 'application/json', responseJsonSchema: mode === 'shelf' ? shelfRecognitionSchema : recognitionSchema, maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: 'low' } } });
+      const body = JSON.stringify({ systemInstruction: { parts: [{ text: mode === 'cover' ? coverTranscriptionPrompt : mode === 'shelf' ? shelfRecognitionPrompt : recognitionPrompt }] }, contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/jpeg', data } }] }], generationConfig: { responseMimeType: 'application/json', responseJsonSchema: mode === 'cover' ? coverTranscriptionSchema : mode === 'shelf' ? shelfRecognitionSchema : recognitionSchema, maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: 'low' } } });
       if (new TextEncoder().encode(body).length > 10 * 1024 * 1024) return error('invalid', 'בקשת הזיהוי גדולה מדי.');
       const models = [visionModels.primary, visionModels.backup, visionModels.backup2];
       for (const [index, model] of models.entries()) {
@@ -85,7 +86,7 @@ export class VisionSession {
           catch { return error('invalid', 'התשובה אינה JSON תקין.', undefined, 'json'); }
           if (JSON.stringify(extracted).includes(key)) return error('invalid', 'תגובת הזיהוי נדחתה מטעמי פרטיות.', undefined, 'privacy');
           let result;
-          try { result = mode === 'shelf' ? validateShelfRecognition(extracted) : validateRecognition(extracted); }
+          try { result = mode === 'cover' ? transcriptionToRecognition(extracted) : mode === 'shelf' ? validateShelfRecognition(extracted) : validateRecognition(extracted); }
           catch { return error('invalid', 'פרטי הספר לא עברו אימות.', undefined, 'validation'); }
           return { result, model, usedBackup: index > 0 };
         } catch (cause) {
@@ -117,7 +118,7 @@ export class VisionRouter {
   stopForQuota() { this.gemini.stopForQuota(); }
   set onQuotaStop(value: (()=>void)|undefined) { this.gemini.onQuotaStop=value; }
   cancel() { this.#sequence++;this.gemini.cancel();this.groq.cancel();this.#local?.cancel(); }
-  async recognize(blob: Blob,onBackup: (reason?:string)=>void,mode:'single'|'shelf'='single',localOnly=false,onFailure?: (failure: VisionFailure) => void): Promise<VisionOutcome> {
+  async recognize(blob: Blob,onBackup: (reason?:string)=>void,mode:'single'|'shelf'|'cover'='single',localOnly=false,onFailure?: (failure: VisionFailure) => void): Promise<VisionOutcome> {
     const sequence=++this.#sequence;
     const current=()=> { if(sequence!==this.#sequence)throw new VisionError('cancelled','הזיהוי בוטל.'); };
     const cloudAllowed=typeof navigator==='undefined'||navigator.onLine !== false;
@@ -129,7 +130,7 @@ export class VisionRouter {
     }
     current();onBackup(localOnly?'קורא טקסט במכשיר בעזרת OCR…':'שירותי הענן אינם זמינים — עובר ל-OCR מקומי.');
     const { localOcrSession }=await import('./localOcr');current();this.#local=localOcrSession;
-    const result=await localOcrSession.recognize(blob,mode,onBackup);current();return result;
+    const result=await localOcrSession.recognize(blob,mode==='cover'?'single':mode,onBackup);current();return result;
   }
 }
 export const personalVisionSession = new VisionRouter();

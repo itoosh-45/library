@@ -4,7 +4,7 @@ test('whole images are prepared and sent automatically without crop or format/qu
   const calls: { mimeType: string; data: string }[] = [];
   await page.route('https://generativelanguage.googleapis.com/**', async route => {
     calls.push(JSON.parse(route.request().postData()!).contents[0].parts[0].inlineData);
-    await route.fulfill({ json: { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ items: [] }) }] } }] } });
+    await route.fulfill({ json: { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ title_lines: [], authors: [] }) }] } }] } });
   });
   await page.goto(process.env.VISION_TEST_PUBLIC === '1' ? 'https://itoosh-45.github.io/library/' : '');
   await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'הוספה ידנית', exact: true }).click();

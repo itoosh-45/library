@@ -23,11 +23,16 @@ export async function restoreGoodreadsKey() {
   try { const saved = await personalCredentials.credentials.get('goodreads'); if (saved?.key) configure(saved.key); }
   catch { token = ''; }
 }
+function waitingError(providerName: string, until: number) {
+  const time = new Date(until).toLocaleTimeString('he-IL', {hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false});
+  return new CatalogError('rate-limited', 'שירות הקטלוג ממתין לפני חיפוש ב־' + providerName + '. אפשר לנסות שוב אחרי ' + time + '.', Math.max(0, until - Date.now()));
+}
 export function catalogServiceRequest(fetcher: typeof fetch = fetch, providerName = 'Goodreads', cooldownMilliseconds = 10000) {
   let nextAt = 0;
   async function request(path: string, body: object, signal: AbortSignal) {
     if (!token) throw new CatalogError('unavailable', 'להפעלת מקור זה, הגדר את מפתח שירות הקטלוג הפרטי בהגדרות.');
-    if (Date.now() < (stoppedUntil.get(providerName) ?? 0)) throw new CatalogError('rate-limited', providerName + ' ביקש להמתין לפני חיפוש נוסף.');
+    const until = stoppedUntil.get(providerName) ?? 0;
+    if (Date.now() < until) throw waitingError(providerName, until);
     const wait = nextAt - Date.now();
     if (wait > 0) await new Promise<void>((resolve, reject) => {
       const abort = () => { clearTimeout(timer); signal.removeEventListener('abort', abort); reject(new DOMException('Cancelled', 'AbortError')); };
@@ -35,7 +40,7 @@ export function catalogServiceRequest(fetcher: typeof fetch = fetch, providerNam
       signal.addEventListener('abort', abort, { once: true }); if (signal.aborted) abort();
     });
     const response = await fetcher(goodreadsEndpoint + path, { method: 'POST', signal, credentials: 'omit', redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify(body) });
-    if (response.status === 429) { const wait = retryAfterMs(response.headers); await response.body?.cancel(); stoppedUntil.set(providerName, Date.now() + wait); throw new CatalogError('rate-limited', providerName + ' ביקש להמתין לפני חיפוש נוסף.', wait); }
+    if (response.status === 429) { const wait = retryAfterMs(response.headers); await response.body?.cancel(); const until = Date.now() + wait; stoppedUntil.set(providerName, until); throw waitingError(providerName, until); }
     if (!response.ok) {
       let state: unknown;
       try { state = (await readCatalogJson(response)).state; } catch { /* Never display raw provider messages. */ }

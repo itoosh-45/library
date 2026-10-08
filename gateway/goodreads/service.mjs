@@ -105,7 +105,7 @@ export function createGoodreadsService({ token, origins, path, dailyLimit = 200,
           if (!nliAdapter) throw new GoodreadsError('unavailable', 'הספרייה הלאומית אינה מוגדרת בשרת.');
           const wait=quota.reserve('nli',now(),dailyLimit);
           if (wait) { const error=new GoodreadsError('rate-limited','יש להמתין לפני חיפוש נוסף בספרייה הלאומית.',429);error.retryAfterMilliseconds=wait;throw error; }
-          try { const results=await nliAdapter.search(nliQuery,controller.signal);value={provider:'nli',results};quota.defer('nli',now()+10000); }
+          try { const results=await nliAdapter.search(nliQuery,controller.signal);value={provider:'nli',results};quota.defer('nli',now()+2000); }
           catch { quota.defer('nli',now()+60000);throw new GoodreadsError('unavailable','הספרייה הלאומית לא השלימה את החיפוש. אפשר להשתמש במקור אחר.'); }
         } else value = await upstream(url, parse, controller.signal);
         cache.prepare('DELETE FROM goodreads_cache WHERE expires<=?').run(now());

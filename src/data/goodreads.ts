@@ -23,7 +23,7 @@ export async function restoreGoodreadsKey() {
   try { const saved = await personalCredentials.credentials.get('goodreads'); if (saved?.key) configure(saved.key); }
   catch { token = ''; }
 }
-export function catalogServiceRequest(fetcher: typeof fetch = fetch, providerName = 'Goodreads') {
+export function catalogServiceRequest(fetcher: typeof fetch = fetch, providerName = 'Goodreads', cooldownMilliseconds = 10000) {
   let nextAt = 0;
   async function request(path: string, body: object, signal: AbortSignal) {
     if (!token) throw new CatalogError('unavailable', 'להפעלת מקור זה, הגדר את מפתח שירות הקטלוג הפרטי בהגדרות.');
@@ -42,7 +42,7 @@ export function catalogServiceRequest(fetcher: typeof fetch = fetch, providerNam
       throw new CatalogError('unavailable', response.status === 401 ? 'מפתח שירות הקטלוג הפרטי נדחה. עדכן אותו בהגדרות.' : state === 'blocked' ? providerName + ' חוסם כרגע את שליפת המידע.' + (providerName === 'Goodreads' ? ' אפשר לנסות ISBN במקום שם, או לבחור מקור אחר.' : ' אפשר לבחור מקור אחר.') : state === 'source-changed' ? 'מבנה הנתונים במקור השתנה. ניתן לבחור מקור אחר.' : providerName + ' אינו זמין כרגע. אפשר לבחור תוצאה ממקור אחר.');
     }
     const value = await readCatalogJson(response);
-    if (value.cached !== true) nextAt = Date.now() + 10000;
+    if (value.cached !== true) nextAt = Date.now() + cooldownMilliseconds;
     if (JSON.stringify(value).includes(token)) throw new CatalogError('error', 'תשובת Goodreads אינה תקינה.');
     return value;
   }

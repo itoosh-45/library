@@ -2,10 +2,8 @@ import { CatalogError, validateQuery, type CatalogAdapter, type CatalogQuery } f
 import { catalogServiceRequest } from './goodreads';
 import { validateCandidate, type Candidate } from './metadata';
 import { comparableISBN, parseISBN } from './books';
-export function normalizedDanacode(value: string): string {
-  const parts = /^\s*(\d{1,4})\s*-\s*(\d{1,8})\s*$/.exec(value);
-  return parts ? parts[1].padStart(4, '0') + parts[2].padStart(8, '0') : value.replace(/\s/g, '');
-}
+import { normalizedDanacode } from './danacode';
+export { normalizedDanacode } from './danacode';
 export function exactIdentifierMatch(query: CatalogQuery, candidate: Candidate): boolean {
   if (query.danacode) return typeof candidate.fields.danacode === 'string' && normalizedDanacode(query.danacode) === normalizedDanacode(candidate.fields.danacode);
   if (query.isbn) {

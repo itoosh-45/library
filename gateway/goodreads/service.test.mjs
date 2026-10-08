@@ -145,3 +145,15 @@ test('Dani danacode routes authenticate, validate redirects, cache searches and 
   const bad = await setup({fetcher: async () => new Response(null, {status: 302, headers: {Location: 'http://127.0.0.1/admin'}})});
   try { assert.equal((await bad.request({query:'012300004567'}, {}, '/v1/danacode')).status, 503); } finally { await bad.close(); }
 });
+
+test('NLI service authenticates, caches normalized rows and keeps failures and quotas isolated',async()=>{
+ let calls=0;const candidate={provider:'nli',recordId:'123',kind:'edition',sourceUrl:null,fetchedAt:'2026-10-08T00:00:00.000Z',fields:{title:'ספר סינתטי'},warnings:[]};
+ const app=await setup({nliAdapter:{async search(query){calls++;if(query.title==='error')throw new Error('PRIVATE-NLI-CANARY');return [candidate];}}});
+ try{
+  assert.equal((await app.request({query:{title:'ספר'}},{Authorization:'Bearer wrong'},'/v1/nli-search')).status,401);assert.equal(calls,0);
+  const good=await app.request({query:{title:'ספר'}},{},'/v1/nli-search');assert.equal(good.status,200);assert.equal((await good.json()).results[0].provider,'nli');
+  const cached=await app.request({query:{title:'ספר'}},{},'/v1/nli-search');assert.equal((await cached.json()).cached,true);assert.equal(calls,1);
+  assert.equal((await app.request({query:{title:'אחר'}},{},'/v1/nli-search')).status,429);
+  assert.equal((await app.request()).status,200);app.advance();const failure=await app.request({query:{title:'error'}},{},'/v1/nli-search');assert.equal(failure.status,503);assert.ok(!(await failure.text()).includes('PRIVATE-NLI-CANARY'));
+ }finally{await app.close();}
+});

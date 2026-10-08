@@ -3,7 +3,7 @@ const endpoint = 'https://maya-n8n.duckdns.org/library-catalog';
 const key = 'a'.repeat(64);
 async function enable(page: Page) {
   await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
-  await page.getByText('Goodreads · פרטי ספר וכריכות', { exact: true }).click();
+  await page.getByText('קטלוגים · דני ספרים, הספרייה הלאומית ו־Goodreads', { exact: true }).click();
   await page.getByLabel('מפתח שירות הקטלוג הפרטי', { exact: true }).fill(key);
   await page.getByRole('button', { name: 'שמירת מפתח שירות הקטלוג', exact: true }).click();
   await expect(page.getByText('שירות הקטלוג הפרטי מוגדר במכשיר הזה.', { exact: true })).toBeVisible();
@@ -20,6 +20,7 @@ export function goodreadsTests() {
     let details = 0;
     await page.route(endpoint + '/**', route => {
       expect(route.request().headers().authorization).toBe('Bearer ' + key);
+      if (route.request().url().endsWith('/nli-search')) return route.fulfill({ json: { provider: 'nli', results: [], cached: true } });
       const source = { provider: 'goodreads', recordId: '123', sourceUrl: 'https://www.goodreads.com/book/show/123', fetchedAt: '2026-10-07T00:00:00.000Z', cached: true };
       if (route.request().url().endsWith('/v1/search')) { expect(route.request().postDataJSON()).toEqual({ query: 'ספר סינתטי' }); return route.fulfill({ json: { provider: 'goodreads', cached: true, results: [{ ...source, fields: { title: 'ספר סינתטי' } }] } }); }
       details++; expect(route.request().postDataJSON()).toEqual({ id: '123' });
@@ -58,7 +59,7 @@ export function goodreadsTests() {
   test('Goodreads metadata can be edited before saving and a catalog series can be replaced manually', async ({ page }) => {
     await page.goto(''); await enable(page);
     await page.route('https://openlibrary.org/**', route => route.fulfill({ json: { docs: [] } }));
-    await page.route(endpoint + '/**', route => route.fulfill({ json: route.request().url().endsWith('/v1/search') ? { provider: 'goodreads', cached: true, results: [{ recordId: '123', sourceUrl: 'https://www.goodreads.com/book/show/123', fields: { title: 'ספר סינתטי' } }] } : { provider: 'goodreads', recordId: '123', sourceUrl: 'https://www.goodreads.com/book/show/123', cached: true, fields: { title: 'ספר סינתטי', series: 'סדרה מהמקור', seriesNumber: 3, publicationDate: '2024-02-29', publicationYear: 2024, binding: 'Paperback' } } }));
+    await page.route(endpoint + '/**', route => route.request().url().endsWith('/nli-search') ? route.fulfill({ json: { provider: 'nli', results: [], cached: true } }) : route.fulfill({ json: route.request().url().endsWith('/v1/search') ? { provider: 'goodreads', cached: true, results: [{ recordId: '123', sourceUrl: 'https://www.goodreads.com/book/show/123', fields: { title: 'ספר סינתטי' } }] } : { provider: 'goodreads', recordId: '123', sourceUrl: 'https://www.goodreads.com/book/show/123', cached: true, fields: { title: 'ספר סינתטי', series: 'סדרה מהמקור', seriesNumber: 3, publicationDate: '2024-02-29', publicationYear: 2024, binding: 'Paperback' } } }));
     await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'חיפוש', exact: true }).click();
     await page.getByLabel('שם ספר, דאנאקוד או ISBN', { exact: true }).fill('ספר סינתטי'); await page.getByRole('button', { name: 'חיפוש בקטלוגים', exact: true }).click();
     await page.getByRole('button', { name: 'בחירת מועמד ספר סינתטי', exact: true }).click();
@@ -74,14 +75,14 @@ export function goodreadsTests() {
 
   test('blocked Goodreads leaves other catalog results usable and exposes no URL input; key deletion survives reload', async ({ page }) => {
     await page.goto(''); await enable(page);
-    await page.route(endpoint + '/**', route => route.fulfill({ status: 503, json: { state: 'blocked' } }));
+    await page.route(endpoint + '/**', route => route.request().url().endsWith('/nli-search') ? route.fulfill({ json: { provider: 'nli', results: [], cached: true } }) : route.fulfill({ status: 503, json: { state: 'blocked' } }));
     await page.route('https://openlibrary.org/**', route => route.fulfill({ json: { docs: [{ key: '/works/OL88W', title: 'ספר ממקור אחר' }] } }));
     await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'חיפוש', exact: true }).click();
     await page.getByLabel('שם ספר, דאנאקוד או ISBN', { exact: true }).fill('ספר'); await page.getByRole('button', { name: 'חיפוש בקטלוגים', exact: true }).click();
     await expect(page.getByText('Goodreads חוסם כרגע את שליפת המידע. אפשר לנסות ISBN במקום שם, או לבחור מקור אחר.', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'בחירת מועמד ספר ממקור אחר', exact: true })).toBeVisible(); await expect(page.locator('input[type="url"]')).toHaveCount(0);
     await page.getByRole('button', { name: 'סגירה', exact: true }).click(); await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
-    await page.getByText('Goodreads · פרטי ספר וכריכות', { exact: true }).click(); await page.getByRole('button', { name: 'מחיקת מפתח שירות הקטלוג', exact: true }).click();
-    await page.reload(); await page.getByText('Goodreads · פרטי ספר וכריכות', { exact: true }).click(); await expect(page.getByLabel('מפתח שירות הקטלוג הפרטי', { exact: true })).toHaveValue('');
+    await page.getByText('קטלוגים · דני ספרים, הספרייה הלאומית ו־Goodreads', { exact: true }).click(); await page.getByRole('button', { name: 'מחיקת מפתח שירות הקטלוג', exact: true }).click();
+    await page.reload(); await page.getByText('קטלוגים · דני ספרים, הספרייה הלאומית ו־Goodreads', { exact: true }).click(); await expect(page.getByLabel('מפתח שירות הקטלוג הפרטי', { exact: true })).toHaveValue('');
   });
 }

@@ -1,3 +1,5 @@
+import { validDay } from '../src/data/loans';
+import { normalizedDanacode } from '../src/data/danacode';
 import { CatalogError, readCatalogValue, retryAfterMs, validateQuery, type CatalogAdapter } from '../src/data/catalog';
 import { parseISBN, comparableISBN } from '../src/data/books';
 import { validateCandidate, safeSourceUrl, type Candidate, type FieldValues } from '../src/data/metadata';
@@ -27,13 +29,14 @@ export function normalizeNli(value: unknown, ignoredMaterialFilter = false): Can
     const id = one('recordid') ?? one('identifier'); if (!id || id.length > 300) return [];
     const book = ['book', 'books', 'ספר'].includes(one('type')?.toLowerCase() ?? ''), result: FieldValues = {}, warnings: string[] = [];
     const title = one('title'); if (title) result.title = title;
-    const creators = data.get('creator'); if (creators?.length) result.authors = creators; // Contributor is not assumed to be an author.
+    const creators = data.get('creator'); if (creators?.length) result.authors = [...new Set(creators.map(name => name.split('$$')[0].trim()).filter(Boolean))]; // Contributor is not assumed to be an author.
     if (ignoredMaterialFilter) warnings.push('הספק לא אישר את מסנן סוג החומר; בדוק את הרשומה מול העותק.');
     if (book) {
       const publisher = one('publisher'), language = one('language'), date = one('date');
       if (publisher) result.publisher = publisher;
       if (language) result.language = language;
       if (date && /^\d{4}$/.test(date) && +date >= 1000) result.publicationYear = +date;
+      else if (date && /^\d{8}$/.test(date) && validDay(date.slice(0,4)+'-'+date.slice(4,6)+'-'+date.slice(6,8))) { result.publicationDate = date.slice(0,4)+'-'+date.slice(4,6)+'-'+date.slice(6,8); result.publicationYear = +date.slice(0,4); }
       else if (date) warnings.push('תאריך הפרסום דורש בדיקה ידנית.');
       const codes = (data.get('isbn') ?? []).flatMap(code => { try { const parsed = parseISBN(code); return [parsed.isbn13 ?? parsed.isbn10!]; } catch { warnings.push('ISBN לא תקין הושמט.'); return []; } });
       if (new Set(codes.map(code => comparableISBN(parseISBN(code)))).size === 1) for (const code of codes) result[code.length === 13 ? 'isbn13' : 'isbn10'] = code;
@@ -49,14 +52,15 @@ export function nliServerAdapter(key: string, fetcher: typeof fetch = fetch): Ca
   let stoppedUntil = 0;
   return { provider: 'nli', async search(input, signal) {
     const query = validateQuery(input);
-    if (query.danacode || query.isbn) throw new CatalogError('unavailable', 'חיפוש מזהה בספרייה הלאומית עדיין דורש אימות; השתמש בחיפוש ידני או בשם ובמחבר.');
+    const identifier = query.danacode ? normalizedDanacode(query.danacode) : query.isbn ? (parseISBN(query.isbn).isbn13 ?? parseISBN(query.isbn).isbn10!) : '';
+    if (query.danacode && !/^\d{12}$/.test(identifier)) throw new CatalogError('unavailable', 'נדרש דאנאקוד בן 12 ספרות או קוד מו״ל־ספר.');
     const terms = [['title', query.title], ['creator', query.author], ['publisher', query.publisher], ['start_date', query.year]].filter(([, value]) => value);
     if (terms.some(([, value]) => value.length < 3 || /[,;]/.test(value))) throw new CatalogError('unavailable', 'החיפוש דורש לפחות שלושה תווים ללא פסיק או נקודה־פסיק.');
     if (Date.now() < stoppedUntil) throw new CatalogError('rate-limited', 'הספרייה הלאומית ביקשה להמתין.');
     const url = new URL('https://api.nli.org.il/openlibrary/search');
     // material_type=books was ignored with code 1010 in the observed live response. Filter locally by explicit type.
-    url.search = new URLSearchParams({ api_key: key, query: terms.map(([field, value]) => `${field},contains,${value}`).join(',AND;'), output_format: 'json', items_per_page: '10', result_page: '1' }).toString();
-    const response = await fetcher(url, { signal, credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer' });
+    url.search = new URLSearchParams({ api_key: key, query: identifier ? `any,exact,${identifier}` : terms.map(([field, value]) => `${field},contains,${value}`).join(',AND;'), output_format: 'json', items_per_page: '5', result_page: '1' }).toString().replace(/\+/g, '%20');
+    const response = await fetcher(url, { signal, credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', headers: { Accept: 'application/json', 'User-Agent': 'Library-App/0.25.1 (+https://github.com/itoosh-45/library)' } });
     if (!response.ok) {
       await response.body?.cancel();
       if (response.status === 429) { const wait = retryAfterMs(response.headers); stoppedUntil = Date.now() + wait; throw new CatalogError('rate-limited', 'הספרייה הלאומית ביקשה להמתין.', wait); }

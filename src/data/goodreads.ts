@@ -4,6 +4,7 @@ import { personalCredentials } from './personalCredentials';
 
 export const goodreadsEndpoint = 'https://maya-n8n.duckdns.org/library-catalog';
 let token = '';
+let serviceQueue:Promise<void> = Promise.resolve();
 const stoppedUntil = new Map<string, number>();
 export const goodreadsConfigured = () => !!token;
 function normalizeKey(value: string) {
@@ -45,7 +46,11 @@ export function catalogServiceRequest(fetcher: typeof fetch = fetch, providerNam
     if (JSON.stringify(value).includes(token)) throw new CatalogError('error', 'תשובת Goodreads אינה תקינה.');
     return value;
   }
-  return request;
+  return (path:string,body:object,signal:AbortSignal) => {
+    const result=serviceQueue.then(()=>{if(signal.aborted)throw new DOMException('Cancelled','AbortError');return request(path,body,signal);});
+    serviceQueue=result.then(()=>undefined,()=>undefined);
+    return result;
+  };
 }
 export function goodreadsAdapter(fetcher: typeof fetch = fetch): CatalogAdapter {
   const request = catalogServiceRequest(fetcher);

@@ -69,3 +69,10 @@ button,input,select,textarea{font:inherit}select{border:1px solid #71878c;border
 /* Shared warning surface: success and progress retain their existing styling. */
 [role="alert"]:not(:empty),.warning-message:not(:empty){border:1px solid #b44a4a;background:#fff0f0;color:#7c2424;border-radius:2px;padding:12px 14px;margin-block:14px;overflow-wrap:anywhere;font-size:inherit;line-height:1.6}
 [role="alert"]:empty,.warning-message:empty{display:none}
+
+.shelf-gallery > .shelf-inline-books { display: block; grid-column: 1 / -1; padding: 0; margin: 0; min-width: 0; }
+.shelf-inline-books .shelf-books { margin-top: 0; padding-top: 14px; }
+.shelf-inline-books .book-list, .shelf-search-results .book-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.shelf-inline-books .book-list > li { margin: 0; }
+.shelf-inline-books .book-jacket .book-cover, .shelf-inline-books .book-jacket .book-placeholder { width: 100%; height: 100%; }
+.shelf-inline-books .book-row { padding: 0; }

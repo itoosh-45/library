@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { Fragment, useState, type FormEvent } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './data/database';
 import { Sheet, Thumbnail } from './BookEditor';
@@ -8,15 +8,16 @@ import type { NamedItem, Shelf, StoredImage } from './data/models';
 import { prepareImage } from './data/images';
 import { errorMessage } from './data/errors';
 
-export function ShelvesPanel({ list, simple = false }: { list: BookListProps; simple?: boolean }) {
+export function ShelvesPanel({ list, simple = false, searching = false }: { list: BookListProps; simple?: boolean; searching?: boolean }) {
   const data = useLiveQuery(async () => ({ shelves: await db.shelves.toArray(), links: await db.bookShelves.toArray() }));
   const [editor, setEditor] = useState<{ shelf?: Shelf }>(), [selected, setSelected] = useState<string>(), [descendants, setDescendants] = useState(true);
   if (!data) return <p role="status">טוען מדפים…</p>;
   const visible = new Set(list.books.map(book => book.id)), shelf = data.shelves.find(item => item.id === selected);
   const ids = shelf ? shelfBookIds(data.shelves, data.links, shelf.id, descendants, visible) : new Set<string>();
+  const contents = shelf && <section className="shelf-books" aria-label={'ספרים במדף: ' + shelf.name}><h2>ספרים במדף: {shelf.name}</h2>{!simple && <label className="check"><input type="checkbox" checked={descendants} onChange={event => setDescendants(event.target.checked)} />כולל תתי־מדפים</label>}<p>{ids.size} ספרים בתצוגה</p>{ids.size ? <BookList {...list} books={list.books.filter(book => ids.has(book.id))} /> : <p>אין ספרים בתצוגה הזאת.</p>}</section>;
   return <><div className="toolbar"><button onClick={() => setEditor({})}>הוספת מדף</button>{!simple && <p className="hint">ספר יכול להופיע בכמה מדפים. הספירות כוללות כל ספר פעם אחת.</p>}</div>
-    {!data.shelves.length ? <section className="empty-state"><h2>המדפים שלך</h2><p>צור מדף, ותוכל לבחור אותו בכרטיס הספר.</p></section> : <ul className={simple ? "shelf-tree shelf-gallery" : "shelf-tree"} aria-label="עץ המדפים">{shelfRows(data.shelves).map(({ shelf, depth, path }) => <li key={shelf.id} style={{ paddingInlineStart: Math.min(depth, 4) * 12 }}><button className="shelf-select secondary" aria-pressed={selected === shelf.id} onClick={() => setSelected(shelf.id)} title={path}><Thumbnail imageId={shelf.imageId} alt={'תמונת המדף ' + shelf.name} /><span className="shelf-info">{shelf.name}{depth > 0 && <small>רמה {depth + 1} · בתוך {data.shelves.find(item => item.id === shelf.parentId)?.name}</small>}</span><span className="shelf-count">{shelfBookIds(data.shelves, data.links, shelf.id, true, visible).size} ספרים</span></button><button className="secondary edit-collection" aria-label={'עריכת מדף ' + shelf.name} onClick={() => setEditor({ shelf })}>עריכה</button></li>)}</ul>}
-    {shelf && <section className="shelf-books"><h2>ספרים במדף: {shelf.name}</h2>{!simple && <label className="check"><input type="checkbox" checked={descendants} onChange={event => setDescendants(event.target.checked)} />כולל תתי־מדפים</label>}<p>{ids.size} ספרים בתצוגה</p>{ids.size ? <BookList {...list} books={list.books.filter(book => ids.has(book.id))} /> : <p>אין ספרים בתצוגה הזאת.</p>}</section>}
+    {simple && searching ? <section className="shelf-search-results" aria-label="תוצאות חיפוש במדפים"><h2>תוצאות חיפוש <span className="simple-count">{list.books.length}</span></h2>{list.books.length ? <BookList {...list} /> : <p>לא נמצאו ספרים. נסה שם אחר או נקה את החיפוש.</p>}</section> : !data.shelves.length ? <section className="empty-state"><h2>המדפים שלך</h2><p>צור מדף, ותוכל לבחור אותו בכרטיס הספר.</p></section> : <ul className={simple ? "shelf-tree shelf-gallery" : "shelf-tree"} aria-label="עץ המדפים">{shelfRows(data.shelves).map(({ shelf, depth, path }) => <Fragment key={shelf.id}><li style={{ paddingInlineStart: Math.min(depth, 4) * 12 }}><button className="shelf-select secondary" aria-pressed={selected === shelf.id} aria-expanded={simple ? selected === shelf.id : undefined} onClick={() => setSelected(previous => simple && previous === shelf.id ? undefined : shelf.id)} title={path}><Thumbnail imageId={shelf.imageId} alt={'תמונת המדף ' + shelf.name} /><span className="shelf-info">{shelf.name}{depth > 0 && <small>רמה {depth + 1} · בתוך {data.shelves.find(item => item.id === shelf.parentId)?.name}</small>}</span><span className="shelf-count">{shelfBookIds(data.shelves, data.links, shelf.id, true, visible).size} ספרים</span></button><button className="secondary edit-collection" aria-label={'עריכת מדף ' + shelf.name} onClick={() => setEditor({ shelf })}>עריכה</button></li>{simple && selected === shelf.id && <li className="shelf-inline-books">{contents}</li>}</Fragment>)}</ul>}
+    {!simple && contents}
     {editor && <ShelfEditor shelf={editor.shelf} shelves={data.shelves} onClose={() => setEditor(undefined)} />}
   </>;
 }

@@ -5,7 +5,7 @@ import { SqliteCatalogQuota } from '../quota.ts';
 import { bookId, queryText, parseBook, parseSearch, GoodreadsError } from './model.mjs';
 import { danaDigits, daniId, daniUrl, parseDaniBook } from './danibooks.mjs';
 
-export function createGoodreadsService({ token, origins, path, dailyLimit = 200, fetcher = fetch, now = Date.now }) {
+export function createGoodreadsService({ token, origins, path, dailyLimit = 200, fetcher = fetch, now = Date.now, nliAdapter }) {
   if (!/^[a-f0-9]{64}$/.test(token) || !Array.isArray(origins) || !origins.length || !Number.isInteger(dailyLimit) || dailyLimit < 1 || dailyLimit > 1000) throw new Error('Invalid service configuration');
   const quota = new SqliteCatalogQuota(path);
   const cache = new DatabaseSync(path);
@@ -66,20 +66,21 @@ export function createGoodreadsService({ token, origins, path, dailyLimit = 200,
     const origin = req.headers.origin;
     if (origin && !allowed.has(origin)) return send(403, { state: 'denied' });
     if (origin) { res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Vary', 'Origin'); res.setHeader('Access-Control-Expose-Headers', 'Retry-After'); }
-    if (!['/v1/book', '/v1/search', '/v1/danacode', '/v1/danibook'].includes(req.url)) return send(404, { state: 'not-found' });
+    if (!['/v1/book', '/v1/search', '/v1/danacode', '/v1/danibook', '/v1/nli-search'].includes(req.url)) return send(404, { state: 'not-found' });
     if (req.method === 'OPTIONS' && origin) { res.setHeader('Access-Control-Allow-Methods', 'POST'); res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type'); return send(204, {}); }
     const supplied = Buffer.from(req.headers.authorization?.replace(/^Bearer /, '') ?? '');
     if (supplied.length !== secret.length || !timingSafeEqual(supplied, secret)) return send(401, { state: 'unauthorized' });
     if (req.method !== 'POST') return send(405, { state: 'method-not-allowed' });
     if (req.headers['content-type'] !== 'application/json') return send(415, { state: 'invalid-request' });
     if (Number(req.headers['content-length']) > 1024) return send(413, { state: 'too-large' });
-    let key, url, parse;
+    let key, url, parse, nliQuery;
     try {
       let length = 0; const chunks = [];
       for await (const chunk of req) { length += chunk.length; if (length > 1024) return send(413, { state: 'too-large' }); chunks.push(chunk); }
       const input = JSON.parse(Buffer.concat(chunks).toString('utf8'));
       if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length !== 1) throw new GoodreadsError('invalid', 'בקשה אינה תקינה.', 400);
-      if (req.url === '/v1/danibook') { const id = daniId(input.id); key = 'danibook:' + id; url = daniUrl(id); parse = html => parseDaniBook(html, id); }
+      if (req.url === '/v1/nli-search') { if (!input.query || typeof input.query !== 'object' || Array.isArray(input.query)) throw new Error(); nliQuery=input.query; key='nli:v1:'+createHash('sha256').update(JSON.stringify(nliQuery)).digest('hex'); }
+      else if (req.url === '/v1/danibook') { const id = daniId(input.id); key = 'danibook:' + id; url = daniUrl(id); parse = html => parseDaniBook(html, id); }
       else if (req.url === '/v1/danacode') { const digits = danaDigits(input.query); key = 'danacode:' + digits; url = 'https://www.danibooks.co.il/search/?q=' + digits; parse = () => ({ provider: 'danibooks', results: [] }); }
       else if (req.url === '/v1/book') { const id = bookId(input.id); key = 'book:v2:' + id; url = 'https://www.goodreads.com/book/show/' + id; parse = html => parseBook(html, id); }
       else {
@@ -99,7 +100,14 @@ export function createGoodreadsService({ token, origins, path, dailyLimit = 200,
       const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
       const disconnect = () => { if (!res.writableEnded) controller.abort(); }; res.on('close', disconnect);
       try {
-        const value = await upstream(url, parse, controller.signal);
+        let value;
+        if (nliQuery) {
+          if (!nliAdapter) throw new GoodreadsError('unavailable', 'הספרייה הלאומית אינה מוגדרת בשרת.');
+          const wait=quota.reserve('nli',now(),dailyLimit);
+          if (wait) { const error=new GoodreadsError('rate-limited','יש להמתין לפני חיפוש נוסף בספרייה הלאומית.',429);error.retryAfterMilliseconds=wait;throw error; }
+          try { const results=await nliAdapter.search(nliQuery,controller.signal);value={provider:'nli',results};quota.defer('nli',now()+10000); }
+          catch { quota.defer('nli',now()+60000);throw new GoodreadsError('unavailable','הספרייה הלאומית לא השלימה את החיפוש. אפשר להשתמש במקור אחר.'); }
+        } else value = await upstream(url, parse, controller.signal);
         cache.prepare('DELETE FROM goodreads_cache WHERE expires<=?').run(now());
         cache.prepare('INSERT OR REPLACE INTO goodreads_cache VALUES (?,?,?)').run(key, JSON.stringify(value), now() + 86400000);
         cache.exec('DELETE FROM goodreads_cache WHERE key NOT IN (SELECT key FROM goodreads_cache ORDER BY expires DESC LIMIT 200)');

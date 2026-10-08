@@ -26,3 +26,16 @@ it('NLI browser spacing is two seconds for uncached successful requests',async()
   await vi.advanceTimersByTimeAsync(1);await second;expect(calls).toBe(2);
  }finally{vi.useRealTimers();}
 });
+
+it('NLI wait shows a fixed local deadline, keeps the remaining hold and allows a fresh request exactly at expiry',async()=>{
+ await rememberGoodreadsKey('b'.repeat(64));vi.useFakeTimers();vi.setSystemTime(new Date('2026-10-09T10:00:00Z'));
+ try {
+  const fetcher=vi.fn<typeof fetch>().mockResolvedValueOnce(new Response('',{status:429,headers:{'Retry-After':'60'}})).mockResolvedValue(Response.json({provider:'nli',cached:true,results:[]}));
+  const adapter=nliCatalogAdapter(fetcher),signal=new AbortController().signal,query={...emptyQuery,title:'ספר בדיקה'};
+  const first=await adapter.search(query,signal).catch(error=>error);
+  expect(first.safeMessage).toContain('שירות הקטלוג');expect(first.safeMessage).toContain('אפשר לנסות שוב אחרי');expect(first.safeMessage).not.toContain('ביקש');expect(first.retryAfterMilliseconds).toBe(60000);
+  await vi.advanceTimersByTimeAsync(59999);const second=await adapter.search(query,signal).catch(error=>error);
+  expect(second.safeMessage).toBe(first.safeMessage);expect(second.retryAfterMilliseconds).toBe(1);expect(fetcher).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(1);await expect(adapter.search(query,signal)).resolves.toEqual([]);expect(fetcher).toHaveBeenCalledTimes(2);
+ }finally{vi.useRealTimers();}
+});

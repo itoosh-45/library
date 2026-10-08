@@ -4,7 +4,7 @@ import type { BookInput } from './books';
 
 export const recognitionVersion = 'single-book-v1';
 export const shelfRecognitionVersion = 'shelf-v1';
-export const recognitionModels = { primary: 'gemini-3.5-flash-lite', backup: 'gemini-3.7-flash', backup2: 'gemini-3.6-flash', legacy: 'gemini-3.8-flash', groq: 'qwen/qwen3.8-27b', ocr: 'tesseract-layout-v1' } as const;
+export const recognitionModels = { primary: 'gemini-3.5-flash-lite', backup: 'gemini-3.1-flash-lite', backup2: 'gemini-3.5-flash', legacyBackup: 'gemini-3.7-flash', legacyBackup2: 'gemini-3.6-flash', legacy: 'gemini-3.8-flash', groq: 'qwen/qwen3.8-27b', ocr: 'tesseract-layout-v1' } as const;
 export const recognitionFields = ['title', 'authors', 'isbn', 'danacode', 'publisher'] as const;
 export type RecognitionField = typeof recognitionFields[number];
 export interface RecognizedBook {

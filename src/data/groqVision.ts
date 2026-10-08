@@ -10,6 +10,16 @@ export class GroqVisionSession {
   get hasKey() { return !!this.#key; }
   get blockedReason(): VisionState { return !this.#key ? 'key' : !this.#free || !this.#consent ? 'spending-lock' : 'quota'; }
   get ready() { return this.hasKey && this.#free && this.#consent && Date.now() >= this.#blockedUntil; }
+  async checkConnection(): Promise<void> {
+    if (!this.hasKey || !this.#free || !this.#consent) throw new VisionError('spending-lock', 'הגדר מפתח ואשר מסלול חינמי לפני בדיקת החיבור.');
+    const response = await this.fetcher('https://api.groq.com/openai/v1/models', { headers: { Authorization: 'Bearer ' + this.#key }, credentials: 'omit', redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(15000) });
+    if (!response.ok) { await response.body?.cancel().catch(() => {}); throw new VisionError([401,403].includes(response.status) ? 'key' : 'unavailable', [401,403].includes(response.status) ? 'Groq דחה את המפתח או הרשאותיו. העתק מפתח API פעיל מ־Groq Console; החלפת מודל לא תתקן דחיית אימות.' : 'בדיקת החיבור ל־Groq לא הושלמה. נסה מאוחר יותר.', response.status); }
+    if (!response.body) throw new VisionError('invalid', 'תשובת Groq ריקה.');
+    const reader = response.body.getReader(); let size = 0, text = ''; const decoder = new TextDecoder();
+    try { for (;;) { const part = await reader.read(); if (part.done) break; size += part.value.byteLength; if (size > 65536) throw new VisionError('invalid', 'תשובת Groq גדולה מדי.'); text += decoder.decode(part.value, { stream: true }); } text += decoder.decode(); } finally { await reader.cancel().catch(() => {}); }
+    const value = JSON.parse(text);
+    if (text.includes(this.#key) || !Array.isArray(value.data) || value.data.length > 200 || !value.data.some((model: { id?: unknown }) => model?.id === recognitionModels.groq)) throw new VisionError('unavailable', 'המפתח התקבל, אך מודל התמונות המוגדר אינו זמין בחשבון הזה.');
+  }
   async recognize(blob: Blob, mode: 'single' | 'shelf'): Promise<VisionOutcome> {
     if (!this.ready) throw new VisionError('spending-lock','Groq אינו מוגדר במסלול חינמי מאושר, או שהמכסה שלו ממתינה לחידוש.');
     if (this.#controller) throw new VisionError('busy','זיהוי כבר מתבצע.');

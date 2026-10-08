@@ -54,7 +54,8 @@ export class VisionSession {
       const data = await jpegBase64(blob); if (controller.signal.aborted) throw cancelled();
       const body = JSON.stringify({ systemInstruction: { parts: [{ text: mode === 'shelf' ? shelfRecognitionPrompt : recognitionPrompt }] }, contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/jpeg', data } }] }], generationConfig: { responseMimeType: 'application/json', responseJsonSchema: mode === 'shelf' ? shelfRecognitionSchema : recognitionSchema, maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: 'low' } } });
       if (new TextEncoder().encode(body).length > 10 * 1024 * 1024) return error('invalid', 'בקשת הזיהוי גדולה מדי.');
-      for (const [index, model] of [visionModels.primary, visionModels.backup].entries()) {
+      const models = [visionModels.primary, visionModels.backup, visionModels.backup2];
+      for (const [index, model] of models.entries()) {
         if (controller.signal.aborted || sequence !== this.#sequence) throw cancelled();
         const response = await this.fetcher(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, credentials: 'omit', redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer', signal: controller.signal, body });
         if (controller.signal.aborted || sequence !== this.#sequence) { await response.body?.cancel().catch(() => {}); throw cancelled(); }
@@ -63,8 +64,8 @@ export class VisionSession {
           if (response.status === 429) { this.stopForQuota(); this.onQuotaStop?.(); return error('quota', 'המכסה או מגבלת הקצב הושגה. הזיהוי נעצר ללא ניסיון נוסף או רכישת קרדיטים.', 429); }
           if (response.status === 400) return error('invalid', 'Gemini דחה את בקשת הזיהוי (HTTP 400).', 400);
           if ([401, 403].includes(response.status)) return error('key', 'המפתח או הרשאת הזיהוי נדחו. לא בוצע ניסיון נוסף.', response.status);
-          // A missing model did not process the image. Do not retry ambiguous server/network failures.
-          if (response.status === 404 && index === 0) { onBackup(); continue; }
+          // Each approved free model is attempted once; quota/access errors above stop this chain.
+          if ([404, 500, 502, 503, 504].includes(response.status) && index < models.length - 1) { onBackup(`Gemini החזיר HTTP ${response.status}; מנסה את ${models[index + 1]}.`); continue; }
           return error('unavailable', 'שירות הזיהוי אינו זמין. אפשר להוסיף ידנית; לא בוצע ניסיון נוסף.', response.status);
         }
         const root = await responseValue(response, key); if (controller.signal.aborted || sequence !== this.#sequence) throw cancelled();
@@ -74,7 +75,7 @@ export class VisionSession {
         const parts = candidate.content.parts.filter(part => !part.thought); if (!parts.length || parts.some(part => typeof part.text !== 'string')) return error('invalid', 'תוצאת הזיהוי אינה טקסט תקין.');
         const extracted: unknown = JSON.parse(parts.map(part => part.text).join('')); if (JSON.stringify(extracted).includes(key)) return error('invalid', 'תגובת הזיהוי נדחתה מטעמי פרטיות.');
         const result = mode === 'shelf' ? validateShelfRecognition(extracted) : validateRecognition(extracted);
-        return { result, model, usedBackup: index === 1 };
+        return { result, model, usedBackup: index > 0 };
       }
       return error('unavailable', 'שירות הזיהוי אינו זמין.');
     };

@@ -125,3 +125,23 @@ test('redirects are not followed and completed search network failures do not fr
   try { const response = await redirect.request({ query: 'בדיקה' }, {}, '/v1/search'); assert.equal((await response.json()).state, 'blocked'); }
   finally { await redirect.close(); }
 });
+
+
+test('Dani danacode routes authenticate, validate redirects, cache searches and retain exact book fields', async () => {
+  const urls = [];
+  const html = '<script type="application/ld+json">' + JSON.stringify({ '@type': 'Product', name: 'ספר בדיקה', url: 'https://www.danibooks.co.il/web/?itemid=123&pagetype=9' }) + '</script><span aria-label="מק&quot;ט מוצר 012300004567"></span><span aria-label="מחבר/ת מחבר בדיקה"></span>';
+  const app = await setup({ fetcher: async (url, init) => { urls.push(String(url)); assert.equal(init.redirect, 'manual'); return String(url).includes('/search/') ? new Response(null, { status: 302, headers: { Location: '/web/?pagetype=9&itemid=123' } }) : new Response(html, { headers: { 'Content-Type': 'text/html' } }); } });
+  try {
+    assert.equal((await app.request({query: '123-4567'}, {Authorization: 'Bearer wrong'}, '/v1/danacode')).status, 401);
+    assert.equal((await app.request({query: 'not-a-code'}, {}, '/v1/danacode')).status, 400);
+    const response = await app.request({query: '123-4567'}, {}, '/v1/danacode'); assert.equal(response.status, 200);
+    assert.equal((await response.json()).results[0].recordId, '123');
+    assert.equal((await (await app.request({query: '123-4567'}, {}, '/v1/danacode')).json()).cached, true);
+    assert.equal((await app.request({id: '123'}, {}, '/v1/danibook')).status, 429);
+    app.advance(); const book = await app.request({id: '123'}, {}, '/v1/danibook'); assert.equal(book.status, 200);
+    assert.equal((await book.json()).fields.danacode, '012300004567');
+    assert.deepEqual(urls, ['https://www.danibooks.co.il/search/?q=012300004567','https://www.danibooks.co.il/web/?pagetype=9&itemid=123']);
+  } finally { await app.close(); }
+  const bad = await setup({fetcher: async () => new Response(null, {status: 302, headers: {Location: 'http://127.0.0.1/admin'}})});
+  try { assert.equal((await bad.request({query:'012300004567'}, {}, '/v1/danacode')).status, 503); } finally { await bad.close(); }
+});

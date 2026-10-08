@@ -64,3 +64,12 @@ test('Gemini rejection remains visible after local OCR completes instead of bein
   await expect(diagnostic).toContainText('המפתח או הרשאת הגישה נדחו (HTTP 401)');expect(calls).toBe(1);
   await expect(page.locator('body')).not.toContainText('SYNTHETIC-PROVIDER-SECRET-NEVER-DISPLAY');
 });
+
+test('Groq connection check sends no image and displays an authentication warning', async ({page}) => {
+  let checked=false;
+  await page.route('https://api.groq.com/**',route => {checked=true;expect(route.request().method()).toBe('GET');expect(route.request().postData()).toBeNull();expect(route.request().url()).toBe('https://api.groq.com/openai/v1/models');return route.fulfill({status:401,body:'SYNTHETIC-PRIVATE-ERROR'});});
+  await page.goto('#settings');await page.getByText('Groq · גיבוי לזיהוי תמונות',{exact:true}).click();
+  await page.getByLabel('מפתח Groq אישי',{exact:true}).fill('SYNTHETIC-GROQ-KEY-NEVER-LIVE');await page.getByLabel('בדקתי שחשבון Groq במסלול Free ללא חיוב פעיל',{exact:true}).check();await page.getByLabel('אני מסכים לשליחת תמונות ל-Groq כגיבוי ל-Gemini',{exact:true}).check();await page.getByRole('button',{name:'שמירת מפתח Groq',exact:true}).click();
+  await page.getByRole('button',{name:'בדיקת מפתח Groq ללא תמונה',exact:true}).click();
+  const warning=page.getByRole('alert').filter({hasText:'Groq דחה את המפתח'});await expect(warning).toBeVisible();await expect(warning).toHaveCSS('background-color','rgb(255, 240, 240)');expect(checked).toBe(true);await expect(page.getByText('SYNTHETIC-PRIVATE-ERROR',{exact:true})).toHaveCount(0);
+});

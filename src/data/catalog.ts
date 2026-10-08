@@ -62,7 +62,7 @@ export function openLibraryAdapter(fetcher: typeof fetch = fetch): CatalogAdapte
     return readCatalogJson(response);
   }
   return { provider: 'openlibrary', async search(query, signal) {
-    if (query.danacode) throw new CatalogError('unavailable', 'דאנאקוד דורש חיפוש ידני בקטלוג מורשה.');
+    if (query.danacode) throw new CatalogError('unavailable', 'Open Library אינו תומך בחיפוש דאנאקוד.');
     const q = query.isbn ? 'isbn:' + quote(query.isbn) : [['title', query.title], ['author', query.author], ['publisher', query.publisher], ['publish_year', query.year]].filter(([, value]) => value).map(([key, value]) => key + ':' + quote(value)).join(' AND ');
     const params = new URLSearchParams({ q, limit: '10', lang: 'he', fields: 'key,title,author_name,editions,editions.key,editions.title,editions.cover_i,cover_i,subject' });
     const response = await request('/search.json?' + params, signal);

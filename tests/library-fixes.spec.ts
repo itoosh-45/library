@@ -62,7 +62,7 @@ async function barcodeImage(page: Page, code: string, rotate = false) {
   }, { code, rotate });
 }
 
-test('uploaded rotated barcode uses ZXing after native detector finds nothing and stays open for review', async ({ page }) => {
+test('uploaded rotated barcode uses ZXing after native detector finds nothing and searches immediately', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(window, 'BarcodeDetector', { configurable: true, value: class {
       static async getSupportedFormats() { return ['ean_13']; }
@@ -73,11 +73,9 @@ test('uploaded rotated barcode uses ZXing after native detector finds nothing an
   await page.getByRole('button',{name:'הוספת ספר',exact:true}).click(); await page.getByRole('button',{name:'סריקת ברקוד',exact:true}).click();
   await expect(page.getByLabel('סוג המזהה',{exact:true})).toHaveValue('danacode');
   await page.getByLabel('תמונת ברקוד',{exact:true}).setInputFiles({name:'synthetic.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
-  await expect(page.getByLabel('מזהה שנקרא או הוקלד',{exact:true})).toHaveValue('9780140328721');
-  await expect(page.getByLabel('סוג המזהה',{exact:true})).toHaveValue('isbn');
-  await expect(page.getByRole('button',{name:'חיפוש לפי המזהה',exact:true})).toBeEnabled();
-  await expect(page.getByRole('dialog',{name:'סריקת ברקוד',exact:true})).toBeVisible();
-  await page.screenshot({ path: 'test-results/barcode-review-mobile.png', fullPage: true });
+  await expect(page.getByRole('dialog',{name:'סריקת ברקוד',exact:true})).toHaveCount(0);
+  await expect(page.getByLabel('שם ספר, דאנאקוד או ISBN',{exact:true})).toHaveValue('9780140328721');
+  await page.screenshot({ path: 'test-results/barcode-search-mobile.png', fullPage: true });
 });
 
 test('non-ISBN barcode retains its raw digits as danacode; unreadable upload stays open and can retry', async ({ page }) => {
@@ -86,14 +84,12 @@ test('non-ISBN barcode retains its raw digits as danacode; unreadable upload sta
   const blank = await page.evaluate(() => { const c=document.createElement('canvas');c.width=300;c.height=300;const ctx=c.getContext('2d')!;ctx.fillStyle='#fff';ctx.fillRect(0,0,300,300);return c.toDataURL('image/png').split(',')[1]; });
   await page.getByRole('button',{name:'הוספת ספר',exact:true}).click();await page.getByRole('button',{name:'סריקת ברקוד',exact:true}).click();
   await page.getByLabel('תמונת ברקוד',{exact:true}).setInputFiles({name:'blank.png',mimeType:'image/png',buffer:Buffer.from(blank,'base64')});
-  await expect(page.getByRole('status').filter({hasText:'לא נקרא ברקוד'})).toBeVisible({timeout:15000});
+  await expect(page.getByRole('alert').filter({hasText:'לא נקרא ברקוד'})).toBeVisible({timeout:15000});
   await expect(page.getByLabel('תמונת ברקוד',{exact:true})).toBeEnabled();
   await page.getByLabel('תמונת ברקוד',{exact:true}).setInputFiles({name:'synthetic.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
-  await expect(page.getByLabel('מזהה שנקרא או הוקלד',{exact:true})).toHaveValue('4006381333931');
-  await expect(page.getByLabel('סוג המזהה',{exact:true})).toHaveValue('danacode');
-  await page.getByRole('button',{name:'חיפוש לפי המזהה',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'סריקת ברקוד',exact:true})).toHaveCount(0);
   await expect(page.getByLabel('שם ספר, דאנאקוד או ISBN',{exact:true})).toHaveValue('4006381333931');
-  await expect(page.getByRole('link',{name:'פתיחת חיפוש ידני בספרייה הלאומית',exact:true})).toBeVisible();
+  await expect(page.getByRole('link',{name:'פתיחת חיפוש ידני בספרייה הלאומית',exact:true})).toHaveCount(0);
 });
 
 test('series and numbers persist, order numerically and are searchable; price lives inside extra details', async ({ page }) => {

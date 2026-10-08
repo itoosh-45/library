@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { DatabaseSync } from 'node:sqlite';
 import type { Server } from 'node:http';
 import { SqliteCatalogQuota } from './quota';
 import { createCatalogServer } from './catalog-server';
@@ -70,4 +71,12 @@ it('T24 a failed post-request ledger write keeps the durable hold and never retr
   const first = await request(base); expect(first.status).toBe(502); expect(await first.text()).not.toContain('STORAGE_SECRET_CANARY');
   expect((await request(base)).status).toBe(429); expect(search).toHaveBeenCalledTimes(1);
   expect(store(file).reserve('nli', now + 20000, 10)).toBe(86400000 - 20000);
+});
+
+it('adding Dani preserves existing provider day budgets and holds across migration and reopen', () => {
+  const file=path(), now=Date.parse('2026-10-08T12:00:00Z'), legacy=new DatabaseSync(file);
+  legacy.exec("CREATE TABLE catalog_quota (provider TEXT PRIMARY KEY CHECK(provider IN ('nli','googlebooks','goodreads')),day TEXT NOT NULL,used INTEGER NOT NULL CHECK(used>=0),next_at INTEGER NOT NULL CHECK(next_at>=0)) STRICT");
+  legacy.prepare('INSERT INTO catalog_quota VALUES (?,?,?,?)').run('goodreads','2026-10-08',2,now+10000); legacy.close();
+  const expanded=store(file); expect(expanded.reserve('goodreads',now,2)).toBe(43200000); expect(expanded.reserve('danibooks',now,2)).toBe(0); expanded.defer('danibooks',now+10000);
+  const reopened=store(file); expect(reopened.reserve('danibooks',now+1,2)).toBe(9999); expect(reopened.reserve('goodreads',now+10001,2)).toBe(43200000-10001);
 });

@@ -1,7 +1,7 @@
 {
   "name": "personal-library",
   "private": true,
-  "version": "0.24.1",
+  "version": "0.25.0",
   "type": "module",
   "engines": {
     "node": ">=24.0.0 <25.0.0"
@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
-    "test:gateway": "node --test gateway/local-nli-check.test.mjs gateway/goodreads/service.test.mjs",
+    "test:gateway": "node --test gateway/local-nli-check.test.mjs gateway/goodreads/service.test.mjs gateway/goodreads/danibooks.test.mjs",
     "build:gateway": "vite build --config vite.config.gateway.ts",
     "start:gateway": "node .gateway-dist/run.js",
     "build": "npm run typecheck && vite build",

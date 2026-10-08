@@ -13,6 +13,7 @@ import type { BookInput } from './data/books';
 import { errorMessage } from './data/errors';
 import { gatewayAdapter } from './data/catalogGateway';
 import { goodreadsAdapter, goodreadsConfigured } from './data/goodreads';
+import { danibooksAdapter, exactIdentifierMatch } from './data/danibooks';
 
 const fieldLabels: Record<MetadataField, string> = { title: 'שם הספר', subtitle: 'כותרת משנה', authors: 'מחברים', isbn10: 'ISBN-10', isbn13: 'ISBN-13', danacode: 'דאנאקוד', publisher: 'הוצאה לאור', publicationYear: 'שנת הוצאה', publicationDate: 'תאריך פרסום', binding: 'סוג כריכה', edition: 'מהדורה', volume: 'כרך', language: 'שפה', pages: 'מספר עמודים', seriesName: 'סדרה', seriesNumber: 'מספר בסדרה' };
 const openLibrary = openLibraryAdapter();
@@ -49,22 +50,22 @@ function CatalogCoverPreview({ candidate, adapter }: { candidate: Candidate; ada
 
 export function CatalogPanel({ input, disabled, onApply, autoOpen = false, autoSearch = false, fetchCover = false, onBusy, simple = false, searchBy = 'identifier' }: { searchBy?: 'identifier' | 'details'; simple?: boolean; onBusy?: (busy: boolean) => void; input: BookInput; disabled: boolean; autoOpen?: boolean; autoSearch?: boolean; fetchCover?: boolean; onApply: (input: BookInput, candidate: Candidate, fields: MetadataField[], cover?: StoredImage) => void }) {
   const online = useOnline();
-  const [query, setQuery] = useState<CatalogQuery>(() => autoSearch ? { ...emptyQuery, ...(searchBy === 'identifier' && (input.isbn || input.danacode) ? { isbn: input.isbn, danacode: input.danacode } : { title: input.title, author: input.authors.filter(Boolean).join(' ') }) } : ({ ...emptyQuery, title: input.title, author: input.authors.filter(Boolean).join(' '), publisher: input.publisher, year: input.publicationYear, isbn: input.isbn, danacode: input.danacode }));
+  const [query, setQuery] = useState<CatalogQuery>(() => simple && searchBy === 'details' ? { ...emptyQuery, title: input.title, author: input.authors.filter(Boolean).join(' ') } : autoSearch ? { ...emptyQuery, ...(searchBy === 'identifier' && (input.isbn || input.danacode) ? { isbn: input.isbn, danacode: input.danacode } : { title: input.title, author: input.authors.filter(Boolean).join(' ') }) } : ({ ...emptyQuery, title: input.title, author: input.authors.filter(Boolean).join(' '), publisher: input.publisher, year: input.publicationYear, isbn: input.isbn, danacode: input.danacode }));
   const [results, setResults] = useState<ProviderResult[]>([]), [searching, setSearching] = useState(false), [error, setError] = useState('');
   const [resolving, setResolving] = useState(false), [appliedMessage, setAppliedMessage] = useState('');
-  const [adapter] = useState(() => openLibrary), [adapters] = useState(() => [openLibrary, ...serverAdapters, ...(goodreadsConfigured() ? [goodreadsAdapter()] : [])]), [search] = useState(() => new CatalogSearch(db, adapters));
+  const [adapter] = useState(() => openLibrary), [adapters] = useState(() => [openLibrary, ...serverAdapters, danibooksAdapter(), ...(goodreadsConfigured() ? [goodreadsAdapter()] : [])]), [search] = useState(() => new CatalogSearch(db, adapters));
   const request = useRef(0), resolveRequest = useRef<AbortController | undefined>(undefined);
-  useEffect(() => { onBusy?.(resolving); }, [onBusy, resolving]);
+  useEffect(() => { onBusy?.(searching || resolving); }, [onBusy, searching, resolving]);
   useEffect(() => () => { search.cancel(); resolveRequest.current?.abort(); request.current++; }, [search]);
   async function run() {
     if (!navigator.onLine) { setError('חיפוש בקטלוגים דורש חיבור לרשת. אפשר למלא ידנית.'); return; }
     const sequence = ++request.current; resolveRequest.current?.abort(); setResolving(false); setAppliedMessage(''); setError(''); setResults([]); setSearching(true);
-    try { await search.search(query, result => setResults(old => [...old.filter(item => item.provider !== result.provider), result])); }
+    try { const collected: ProviderResult[] = []; await search.search(query, result => { collected.push(result); setResults(old => [...old.filter(item => item.provider !== result.provider), result]); }); const candidates = collected.flatMap(result => result.candidates); if (sequence === request.current && autoSearch && searchBy === 'identifier' && candidates.length === 1) await choose(candidates[0], true); }
     catch (error) { setError(errorMessage(error)); } finally { if (sequence === request.current) setSearching(false); }
   }
   const autoRun = useEffectEvent(run);
   useEffect(() => { if (!autoSearch) return; const timer = window.setTimeout(() => void autoRun(), 0); return () => window.clearTimeout(timer); }, [autoSearch]);
-  async function choose(value: Candidate) {
+  async function choose(value: Candidate, automatic = false) {
     if (!navigator.onLine) { setError('טעינת מועמד דורשת חיבור לרשת.'); return; }
     resolveRequest.current?.abort(); const controller = new AbortController(); resolveRequest.current = controller;
     setResolving(true); setAppliedMessage(''); setError('');
@@ -73,6 +74,7 @@ export function CatalogPanel({ input, disabled, onApply, autoOpen = false, autoS
       const source = adapters.find(item => item.provider === value.provider);
       const resolved = source?.resolve ? await source.resolve(value, controller.signal) : value;
       if (controller.signal.aborted) return;
+      if (automatic && !exactIdentifierMatch(query, resolved)) { setError('נמצאה תוצאה ללא התאמה מדויקת למזהה. בדוק את פרטי הספר ובחר אותה רק אם היא מתאימה.'); return; }
       const { draft, fields } = applyCatalogCandidate(input, resolved);
       let cover: StoredImage | undefined, message = 'כל הפרטים הזמינים הועברו לטיוטה. אפשר לערוך לפני שמירת הספר.';
       if (fetchCover && (resolved.coverUrl || draft.isbn)) {
@@ -91,9 +93,9 @@ export function CatalogPanel({ input, disabled, onApply, autoOpen = false, autoS
   }
   const labels: Record<keyof CatalogQuery, string> = { title: 'שם לחיפוש', author: 'מחבר לחיפוש', publisher: 'הוצאה לחיפוש', year: 'שנה לחיפוש', isbn: 'ISBN לחיפוש', danacode: 'דאנאקוד לחיפוש' };
   return <details data-update-blocked={searching || resolving} className="catalog-panel" open={autoOpen || undefined}><summary>{simple ? 'חיפוש ספר' : 'חיפוש והשלמה מקטלוגים'}</summary>{!online && <p role="status">החיפוש דורש חיבור לרשת.</p>}{simple ? <label className="field">שם ספר, דאנאקוד או ISBN<input value={query.isbn || query.danacode || query.title} maxLength={300} disabled={disabled} onChange={event => { const value = event.target.value; setQuery({ ...emptyQuery, ...(/^[\d -]+$/.test(value) && value.trim() ? (/^97[89][\d -]+$/.test(value) ? { isbn: value } : { danacode: value }) : { title: value, author: query.author }) }); }} /></label> : <><p className="hint">בחירת תוצאה מעבירה את כל הפרטים הזמינים לטיוטה.</p><div className="field-grid">{Object.entries(labels).map(([key, label]) => <label className="field" key={key}>{label}<input maxLength={300} value={query[key as keyof CatalogQuery]} disabled={disabled} onChange={event => setQuery({ ...query, [key]: event.target.value })} /></label>)}</div></>}{simple && <label className="field">מחבר לחיפוש<input value={query.author} maxLength={300} disabled={disabled} onChange={event => setQuery({ ...query, author: event.target.value })} /></label>}<div className="actions"><button type="button" disabled={disabled || !online} onClick={() => void run()}>חיפוש בקטלוגים</button>{(searching || resolving) && <button type="button" className="secondary" onClick={() => { search.cancel(); resolveRequest.current?.abort(); request.current++; setSearching(false); setResolving(false); }}>ביטול החיפוש</button>}{!simple && <button type="button" className="secondary" disabled={disabled || searching || resolving} onClick={async () => { try { await db.metadataCache.clear(); setResults([]); setError('מטמון החיפוש נמחק.'); } catch (error) { setError(errorMessage(error)); } }}>ניקוי תוצאות שמורות</button>}</div>
-    {query.danacode && <p>דאנאקוד נשמר כפי שהוזן. <a href={'https://www.nli.org.il/he/search?projectName=NLI#&q=any,contains,' + encodeURIComponent(query.danacode) + '&bulkSize=30&index=0&sort=rank&t=allresults&mode=basic'} target="_blank" rel="noopener noreferrer">פתיחת חיפוש ידני בספרייה הלאומית</a></p>}
+
     <p role="status" aria-live="polite">{searching ? 'מחפש בקטלוגים…' : resolving ? 'טוען פרטי מהדורה…' : ''}</p><p role="alert" className="error-message">{error}</p>
-    <div className="catalog-results">{results.filter(result => !simple || result.provider === 'openlibrary' || result.provider === 'goodreads' || result.state !== 'unavailable').map(result => <section key={result.provider}><h3>{providerNames[result.provider]}</h3><p role="status">{result.message}</p>{result.candidates.map(item => <article className="candidate" key={item.recordId}><CatalogCoverPreview candidate={item} adapter={adapters.find(value=>value.provider===item.provider) ?? adapter} /><div className="catalog-candidate-details"><h4>{item.fields.title ?? (item.provider === 'goodreads' ? 'מהדורת Goodreads ' + item.recordId : 'ללא שם')}</h4><p>{item.kind === 'work' ? 'יצירה כללית · מהדורה לא מאומתת' : 'מהדורה מוצעת · בדוק מול העותק'}</p>{item.fields.authors && <p>{(item.fields.authors as string[]).join(' · ')}</p>}<button type="button" className="secondary" disabled={disabled || resolving || !online} onClick={() => void choose(item)}>בחירת מועמד {item.fields.title ?? (item.provider === 'goodreads' ? 'מהדורת Goodreads ' + item.recordId : 'ללא שם')}</button></div></article>)}</section>)}</div>
+    <div className="catalog-results">{results.filter(result => !simple || (query.danacode ? result.provider === 'danibooks' : result.provider !== 'danibooks' && (result.provider === 'openlibrary' || result.provider === 'goodreads' || result.state !== 'unavailable'))).map(result => <section key={result.provider}><h3>{providerNames[result.provider]}</h3><p role={['error','timeout','rate-limited','unavailable'].includes(result.state) ? 'alert' : 'status'}>{result.message}</p>{result.candidates.map(item => <article className="candidate" key={item.recordId}><CatalogCoverPreview candidate={item} adapter={adapters.find(value=>value.provider===item.provider) ?? adapter} /><div className="catalog-candidate-details"><h4>{item.fields.title ?? (item.provider === 'goodreads' ? 'מהדורת Goodreads ' + item.recordId : 'ללא שם')}</h4><p>{item.kind === 'work' ? 'יצירה כללית · מהדורה לא מאומתת' : 'מהדורה מוצעת · בדוק מול העותק'}</p>{item.fields.authors && <p>{(item.fields.authors as string[]).join(' · ')}</p>}<button type="button" className="secondary" disabled={disabled || resolving || !online} onClick={() => void choose(item)}>בחירת מועמד {item.fields.title ?? (item.provider === 'goodreads' ? 'מהדורת Goodreads ' + item.recordId : 'ללא שם')}</button></div></article>)}</section>)}</div>
     {appliedMessage && <p className="notice" role="status">{appliedMessage}</p>}
 
   </details>;

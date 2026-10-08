@@ -39,6 +39,8 @@ it('T24/T26 durable day limits and cooldown survive actual independent Node proc
 
 it('T24 simultaneous processes share one reservation and an interrupted request keeps a conservative 24-hour hold', async () => {
   const file = path(), now = Date.parse('2026-10-03T12:00:00Z');
+  // Exercise simultaneous reservations against an initialized deployment ledger, not competing first-time WAL setup.
+  const initialized = new SqliteCatalogQuota(file); initialized.close();
   const results = await Promise.all([child(file, 'unfinished', now), child(file, 'unfinished', now)]);
   expect(results.sort((a,b) => a-b)).toEqual([0,86400000]);
   expect(await child(file, 'success', now + 10001)).toBe(86400000 - 10001);

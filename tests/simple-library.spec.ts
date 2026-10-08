@@ -84,7 +84,7 @@ test('editing the simple form preserves hidden classification, notes, multiple s
   for (const key of Object.keys(before).filter(key => key !== 'books')) expect(after[key as keyof typeof after], key).toEqual(before[key as keyof typeof before]);
 });
 
-test('photo recognition uses all available details with one apply action and no crop controls', async ({ page }) => {
+test('cover transcription reads only title and author with one apply action and no crop controls', async ({ page }) => {
   await page.goto(''); const png = await picture(page);
   await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
   await page.getByText('זיהוי ספר מתמונה · Gemini', { exact: true }).click();
@@ -94,7 +94,12 @@ test('photo recognition uses all available details with one apply action and no 
   await page.getByRole('button', { name: 'שמירת מפתח Gemini', exact: true }).click();
   await expect(page.getByText('מפתח אישי מוגדר בדפדפן הזה.', { exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'כל הספרים', exact: true }).click();
-  await page.route('https://generativelanguage.googleapis.com/**', route => route.fulfill({ json: { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ items: [{ title: 'ספר מתמונה', authors: ['מחבר מתמונה'], isbn: null, danacode: null, publisher: null, visibleText: 'ספר מתמונה מחבר מתמונה', evidenceByField: { title: ['ספר מתמונה'], authors: ['מחבר מתמונה'], isbn: [], danacode: [], publisher: [] }, imageIndex: 0, bbox: [0, 0, 1, 1], uncertaintyReasons: [] }] }) }] } }] } }));
+  let cloudCalls = 0;
+  await page.route('https://generativelanguage.googleapis.com/**', route => {
+    cloudCalls++;
+    expect(Object.keys(route.request().postDataJSON().generationConfig.responseJsonSchema.properties)).toEqual(['title_lines','authors']);
+    return route.fulfill({ json: { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ title_lines: ['ספר מתמונה'], authors: ['מחבר מתמונה'] }) }] } }] } });
+  });
   await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click();
   await page.getByRole('button', { name: 'סריקת תמונה', exact: true }).click();
   await page.getByLabel('בחירת תמונת ספר', { exact: true }).setInputFiles({ name: 'synthetic.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
@@ -104,6 +109,7 @@ test('photo recognition uses all available details with one apply action and no 
   await page.getByRole('button', { name: 'שמירת הספר', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'ספר מתמונה', exact: true })).toBeVisible();
+  expect(cloudCalls).toBe(1);
 });
 
 
@@ -120,11 +126,7 @@ test('photo review edits both fields and searches only after explicit approval',
 
   await page.route('https://openlibrary.org/**', route => { searches.push(route.request().url()); return route.fulfill({ json: { docs: [] } }); });
   await page.route('https://generativelanguage.googleapis.com/**', route => route.fulfill({ json: {
-    candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ items: [{
-      title: 'שם שזוהה', authors: ['מחבר שזוהה'], isbn: null, danacode: null, publisher: null,
-      visibleText: 'שם שזוהה מחבר שזוהה', evidenceByField: { title: ['שם שזוהה'], authors: ['מחבר שזוהה'], isbn: [], danacode: [], publisher: [] },
-      imageIndex: 0, bbox: null, uncertaintyReasons: [],
-    }] }) }] } }],
+    candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ title_lines: ['שם שזוהה'], authors: ['מחבר שזוהה'] }) }] } }],
   } }));
   await page.evaluate(async()=>{const dp='/library/src/data/database.ts',bp='/library/src/data/books.ts';const {db}=await import(dp),{saveBook,emptyInput}=await import(bp);await saveBook(db,{...emptyInput,title:'ספר קיים לבדיקה',isbn:'9780140328721'});});
   await page.getByRole('button',{name:/ספר קיים לבדיקה ללא מחבר/}).click();

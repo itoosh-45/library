@@ -1,4 +1,4 @@
-import {afterEach,expect,it} from 'vitest';
+import {afterEach,expect,it,vi} from 'vitest';
 import {nliCatalogAdapter} from './nliCatalog';
 import {catalogServiceRequest,rememberGoodreadsKey,forgetGoodreadsKey} from './goodreads';
 import {emptyQuery} from './catalog';
@@ -14,4 +14,15 @@ it('shared catalog transport serializes providers so the bounded server never re
  const fetcher:typeof fetch=async()=>{calls++;if(calls===1){entered();await pause;}return Response.json({cached:true});};
  const first=catalogServiceRequest(fetcher,'nli')('/first',{},new AbortController().signal);await ready;
  const second=catalogServiceRequest(fetcher,'goodreads')('/second',{},new AbortController().signal);await Promise.resolve();expect(calls).toBe(1);finish();await Promise.all([first,second]);expect(calls).toBe(2);
+});
+
+it('NLI browser spacing is two seconds for uncached successful requests',async()=>{
+ await rememberGoodreadsKey('b'.repeat(64));vi.useFakeTimers();
+ try {
+  let calls=0;const adapter=nliCatalogAdapter(async()=>{calls++;return Response.json({provider:'nli',results:[]});});const signal=new AbortController().signal;
+  await adapter.search({...emptyQuery,title:'first'},signal);
+  const second=adapter.search({...emptyQuery,title:'second'},signal);
+  await vi.advanceTimersByTimeAsync(1999);expect(calls).toBe(1);
+  await vi.advanceTimersByTimeAsync(1);await second;expect(calls).toBe(2);
+ }finally{vi.useRealTimers();}
 });

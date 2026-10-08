@@ -33,7 +33,7 @@ async function setup(options = {}) {
     fetcher: async url => { calls++; return new Response(fixture(new URL(url).pathname.split('/').pop()), { headers: { 'Content-Type': 'text/html' } }); }, ...options });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const base = 'http://127.0.0.1:' + server.address().port;
-  return { server, path, calls: () => calls, advance: () => { time += 10001; }, now: () => time,
+  return { server, path, calls: () => calls, advance: (milliseconds = 10001) => { time += milliseconds; }, now: () => time,
     request: (body = { id: '123' }, headers = {}, route = '/v1/book') => fetch(base + route, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token, Origin: origin, ...headers }, body: typeof body === 'string' ? body : JSON.stringify(body) }),
     close: async () => { server.close(); server.closeAllConnections(); await once(server, 'close'); await rm(dir, { recursive: true, force: true }); } };
 }
@@ -157,3 +157,14 @@ test('NLI service authenticates, caches normalized rows and keeps failures and q
   assert.equal((await app.request()).status,200);app.advance();const failure=await app.request({query:{title:'error'}},{},'/v1/nli-search');assert.equal(failure.status,503);assert.ok(!(await failure.text()).includes('PRIVATE-NLI-CANARY'));
  }finally{await app.close();}
 });
+
+ test('NLI accepts a new uncached query after two seconds and retains failure cooldown', async () => {
+  const app = await setup({ dailyLimit: 10, nliAdapter: { async search(query) { if(query.title==='error') throw new Error('failed'); return []; } } });
+  try {
+   assert.equal((await app.request({query:{title:'first'}},{},'/v1/nli-search')).status,200);
+   app.advance(1999); const early=await app.request({query:{title:'second'}},{},'/v1/nli-search');assert.equal(early.status,429);assert.equal(early.headers.get('Retry-After'),'1');
+   app.advance(1);assert.equal((await app.request({query:{title:'second'}},{},'/v1/nli-search')).status,200);
+   app.advance(2000);assert.equal((await app.request({query:{title:'error'}},{},'/v1/nli-search')).status,503);
+   app.advance(2000);const failed=await app.request({query:{title:'after-error'}},{},'/v1/nli-search');assert.equal(failed.status,429);assert.equal(failed.headers.get('Retry-After'),'58');
+  } finally { await app.close(); }
+ });

@@ -73,3 +73,12 @@ test('Groq connection check sends no image and displays an authentication warnin
   await page.getByRole('button',{name:'בדיקת מפתח Groq ללא תמונה',exact:true}).click();
   const warning=page.getByRole('alert').filter({hasText:'Groq דחה את המפתח'});await expect(warning).toBeVisible();await expect(warning).toHaveCSS('background-color','rgb(255, 240, 240)');expect(checked).toBe(true);await expect(page.getByText('SYNTHETIC-PRIVATE-ERROR',{exact:true})).toHaveCount(0);
 });
+
+test('malformed Gemini response uses a free backup and presents an editable book without saving',async({page})=>{
+ const models:string[]=[];const item={title:'ספר מתשובת גיבוי',authors:['מחבר בדיקה'],isbn:null,danacode:null,publisher:null,visibleText:'ספר מתשובת גיבוי מחבר בדיקה',evidenceByField:{title:['ספר מתשובת גיבוי'],authors:['מחבר בדיקה'],isbn:[],danacode:[],publisher:[]},imageIndex:0,bbox:null,uncertaintyReasons:[]};
+ await page.route('https://generativelanguage.googleapis.com/**',route=>{models.push(route.request().url().split('/models/')[1].split(':')[0]);return models.length===1?route.fulfill({contentType:'application/json',body:'{'}):route.fulfill({json:{candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({items:[item]})}]}}]}});});
+ await page.goto('#settings');await page.getByText('זיהוי ספר מתמונה · Gemini',{exact:true}).click();await page.getByLabel('מפתח Gemini אישי',{exact:true}).fill('SYNTHETIC-GEMINI-KEY-NEVER-LIVE');await page.getByLabel('בדקתי שהפרויקט של המפתח הוא Free, ללא חיוב פעיל',{exact:true}).check();await page.getByLabel('אני מסכים לשליחת התמונה המוכנה ל־Google Gemini',{exact:true}).check();await page.getByRole('button',{name:'שמירת מפתח Gemini',exact:true}).click();
+ await page.getByRole('link',{name:'כל הספרים',exact:true}).click();await page.getByRole('button',{name:'הוספת ספר',exact:true}).click();await page.getByRole('button',{name:'סריקת תמונה',exact:true}).click();
+ const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=200;c.height=300;return c.toDataURL('image/png').split(',')[1];});await page.getByLabel('בחירת תמונת ספר',{exact:true}).setInputFiles({name:'synthetic.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
+ await expect(page.getByLabel('שם הספר שזוהה',{exact:true})).toHaveValue(item.title);await expect(page.getByText('מודל הזיהוי: gemini-3.7-flash',{exact:true})).toBeVisible();expect(models).toEqual(['gemini-3.5-flash-lite','gemini-3.7-flash']);await expect(page.getByLabel('שם הספר',{exact:true})).toHaveValue('');
+});

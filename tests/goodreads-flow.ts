@@ -4,9 +4,9 @@ const key = 'a'.repeat(64);
 async function enable(page: Page) {
   await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
   await page.getByText('Goodreads · פרטי ספר וכריכות', { exact: true }).click();
-  await page.getByLabel('מפתח גישה ל־Goodreads', { exact: true }).fill(key);
-  await page.getByRole('button', { name: 'שמירת מפתח Goodreads', exact: true }).click();
-  await expect(page.getByText('חיבור Goodreads מוגדר במכשיר הזה.', { exact: true })).toBeVisible();
+  await page.getByLabel('מפתח שירות הקטלוג הפרטי', { exact: true }).fill(key);
+  await page.getByRole('button', { name: 'שמירת מפתח שירות הקטלוג', exact: true }).click();
+  await expect(page.getByText('שירות הקטלוג הפרטי מוגדר במכשיר הזה.', { exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'כל הספרים', exact: true }).click();
 }
 
@@ -78,10 +78,10 @@ export function goodreadsTests() {
     await page.route('https://openlibrary.org/**', route => route.fulfill({ json: { docs: [{ key: '/works/OL88W', title: 'ספר ממקור אחר' }] } }));
     await page.getByRole('button', { name: 'הוספת ספר', exact: true }).click(); await page.getByRole('button', { name: 'חיפוש', exact: true }).click();
     await page.getByLabel('שם ספר, דאנאקוד או ISBN', { exact: true }).fill('ספר'); await page.getByRole('button', { name: 'חיפוש בקטלוגים', exact: true }).click();
-    await expect(page.getByText('Goodreads אינו זמין כרגע. אפשר לבחור תוצאה ממקור אחר.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Goodreads חוסם כרגע את שליפת המידע. אפשר לנסות ISBN במקום שם, או לבחור מקור אחר.', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'בחירת מועמד ספר ממקור אחר', exact: true })).toBeVisible(); await expect(page.locator('input[type="url"]')).toHaveCount(0);
     await page.getByRole('button', { name: 'סגירה', exact: true }).click(); await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
-    await page.getByText('Goodreads · פרטי ספר וכריכות', { exact: true }).click(); await page.getByRole('button', { name: 'מחיקת מפתח Goodreads', exact: true }).click();
-    await page.reload(); await page.getByText('Goodreads · פרטי ספר וכריכות', { exact: true }).click(); await expect(page.getByLabel('מפתח גישה ל־Goodreads', { exact: true })).toHaveValue('');
+    await page.getByText('Goodreads · פרטי ספר וכריכות', { exact: true }).click(); await page.getByRole('button', { name: 'מחיקת מפתח שירות הקטלוג', exact: true }).click();
+    await page.reload(); await page.getByText('Goodreads · פרטי ספר וכריכות', { exact: true }).click(); await expect(page.getByLabel('מפתח שירות הקטלוג הפרטי', { exact: true })).toHaveValue('');
   });
 }

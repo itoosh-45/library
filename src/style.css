@@ -65,3 +65,7 @@ button,input,select,textarea{font:inherit}select{border:1px solid #71878c;border
 .shelf-gallery .shelf-info{font-size:20px}.shelf-gallery .shelf-count{grid-column:2;font-size:15px}
 .shelf-gallery .edit-collection{margin-inline-start:90px}
 @media(max-width:400px){.simple-nav a{font-size:14px;padding-inline:10px}.split-author .field-grid{gap:8px}.shelf-gallery .shelf-info{font-size:18px}}
+
+/* Shared warning surface: success and progress retain their existing styling. */
+[role="alert"]:not(:empty),.warning-message:not(:empty){border:1px solid #b44a4a;background:#fff0f0;color:#7c2424;border-radius:2px;padding:12px 14px;margin-block:14px;overflow-wrap:anywhere;font-size:inherit;line-height:1.6}
+[role="alert"]:empty,.warning-message:empty{display:none}

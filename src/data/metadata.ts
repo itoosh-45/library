@@ -6,7 +6,7 @@ import { validDay } from './loans';
 import { recognitionModels, recognitionVersion, recognitionValues, shelfRecognitionVersion, validateRecognition } from './recognition';
 
 export const metadataFields: MetadataField[] = ['title', 'subtitle', 'authors', 'isbn10', 'isbn13', 'danacode', 'publisher', 'publicationYear', 'publicationDate', 'binding', 'edition', 'volume', 'language', 'pages', 'seriesName', 'seriesNumber'];
-export const providerNames = { openlibrary: 'Open Library', googlebooks: 'Google Books', nli: 'הספרייה הלאומית', goodreads: 'Goodreads' } as const;
+export const providerNames = { openlibrary: 'Open Library', googlebooks: 'Google Books', nli: 'הספרייה הלאומית', goodreads: 'Goodreads', danibooks: 'דני ספרים' } as const;
 export type Provider = keyof typeof providerNames;
 export type FieldValues = MetadataSource['fieldValues'];
 export interface Candidate { provider: Provider; recordId: string; sourceUrl: string | null; fetchedAt: string; kind: 'work' | 'edition' | 'volume'; fields: FieldValues; warnings: string[]; coverUrl?: string; genres?: string[] }
@@ -17,10 +17,11 @@ export const isProvider = (value: unknown): value is Provider => typeof value ==
 export function safeSourceUrl(value: unknown): value is string | null {
   if (value === null) return true;
   if (typeof value !== 'string' || value.length > 1000) return false;
-  try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password && !url.port && !url.hash && ['openlibrary.org', 'books.google.com', 'www.nli.org.il', 'www.goodreads.com'].includes(url.hostname) && ![...url.searchParams.keys()].some(key => /key|token|secret/i.test(key)); } catch { return false; }
+  try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password && !url.port && !url.hash && ['openlibrary.org', 'books.google.com', 'www.nli.org.il', 'www.goodreads.com', 'www.danibooks.co.il'].includes(url.hostname) && ![...url.searchParams.keys()].some(key => /key|token|secret/i.test(key)); } catch { return false; }
 }
 function matchesProvider(provider: Provider, value: string | null, recordId: string): boolean {
   if (provider === 'goodreads') return /^[1-9]\d{0,13}$/.test(recordId) && value === 'https://www.goodreads.com/book/show/' + recordId;
+  if (provider === 'danibooks') return /^[1-9]\d{0,11}$/.test(recordId) && value === 'https://www.danibooks.co.il/web/?pagetype=9&itemid=' + recordId;
   return value === null || new URL(value).hostname === ({ openlibrary: 'openlibrary.org', googlebooks: 'books.google.com', nli: 'www.nli.org.il' })[provider];
 }
 export function validateFieldValues(value: unknown): FieldValues {

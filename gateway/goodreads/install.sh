@@ -14,7 +14,7 @@ test "$(docker ps --filter name=^/library-goodreads$ --format '{{.Names}}')" = '
 install -d -m 0755 "$install_root/app/goodreads"
 install -d -m 0700 -o 1000 -g 1000 "$install_root/data" "$install_root/secrets"
 install -m 0644 "$source_root/quota.ts" "$install_root/app/quota.ts"
-for file in model.mjs service.mjs run.mjs Dockerfile nginx.conf; do install -m 0644 "$source_root/goodreads/$file" "$install_root/app/goodreads/$file"; done
+for file in model.mjs danibooks.mjs service.mjs run.mjs Dockerfile nginx.conf; do install -m 0644 "$source_root/goodreads/$file" "$install_root/app/goodreads/$file"; done
 openssl rand -hex 32 > "$install_root/secrets/library-token"
 chown 1000:1000 "$install_root/secrets/library-token"
 chmod 0400 "$install_root/secrets/library-token"

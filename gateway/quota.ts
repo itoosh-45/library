@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { isAbsolute } from 'node:path';
 
-export type ServerProvider = 'nli' | 'googlebooks' | 'goodreads';
+export type ServerProvider = 'nli' | 'googlebooks' | 'goodreads' | 'danibooks';
 export interface CatalogQuotaStore {
   /** Durably consume a slot before contacting the provider; zero admits, positive milliseconds reject. */
   reserve(provider: ServerProvider, now: number, dailyLimit: number): number;
@@ -17,10 +17,27 @@ export class SqliteCatalogQuota implements CatalogQuotaStore {
     try {
       this.database.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
         CREATE TABLE IF NOT EXISTS catalog_quota (
-          provider TEXT PRIMARY KEY CHECK(provider IN ('nli','googlebooks','goodreads')),
+          provider TEXT PRIMARY KEY CHECK(provider IN ('nli','googlebooks','goodreads','danibooks')),
           day TEXT NOT NULL, used INTEGER NOT NULL CHECK(used >= 0),
           next_at INTEGER NOT NULL CHECK(next_at >= 0)
         ) STRICT;`);
+      // Expand the provider constraint atomically without resetting existing daily limits or holds.
+      this.database.exec('BEGIN IMMEDIATE');
+      try {
+        const schema = this.database.prepare("SELECT sql FROM sqlite_master WHERE name='catalog_quota'").get()?.sql;
+        if (typeof schema !== 'string') throw new Error('Missing quota schema.');
+        if (!schema.includes("'danibooks'")) this.database.exec(`
+          CREATE TABLE catalog_quota_expanded (
+            provider TEXT PRIMARY KEY CHECK(provider IN ('nli','googlebooks','goodreads','danibooks')),
+            day TEXT NOT NULL, used INTEGER NOT NULL CHECK(used >= 0),
+            next_at INTEGER NOT NULL CHECK(next_at >= 0)
+          ) STRICT;
+          INSERT INTO catalog_quota_expanded SELECT provider,day,used,next_at FROM catalog_quota;
+          DROP TABLE catalog_quota;
+          ALTER TABLE catalog_quota_expanded RENAME TO catalog_quota;
+        `);
+        this.database.exec('COMMIT');
+      } catch (error) { this.database.exec('ROLLBACK'); throw error; }
     } catch (error) { this.database.close(); throw error; }
   }
   reserve(provider: ServerProvider, now: number, dailyLimit: number): number {

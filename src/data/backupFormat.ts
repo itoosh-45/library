@@ -11,7 +11,7 @@ export function hasGoodreadsData(data: { metadataSources?: unknown[]; recognitio
   const source = (value: unknown): boolean => {
     if (!value || typeof value !== 'object') return false;
     const row = value as Record<string, unknown>, fields = row.fieldValues ?? row.fields;
-    return row.provider === 'goodreads' || !!fields && typeof fields === 'object' && (Object.hasOwn(fields, 'seriesName') || Object.hasOwn(fields, 'seriesNumber'));
+    return ['goodreads', 'danibooks'].includes(String(row.provider)) || !!fields && typeof fields === 'object' && (Object.hasOwn(fields, 'seriesName') || Object.hasOwn(fields, 'seriesNumber'));
   };
   return !!data.metadataSources?.some(source) || !!data.recognitionDrafts?.some(value => {
     if (!value || typeof value !== 'object' || !('items' in value) || !Array.isArray(value.items)) return false;

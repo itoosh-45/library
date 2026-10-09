@@ -82,10 +82,10 @@ export async function retryDraftImage(database: LibraryDatabase, id: string, ima
   await mutate(database, id, draft => { if (draft.status === 'running' || draft.status === 'quota') return fail('התור פעיל או נעצר בגלל מכסה.'); const image = draft.images.find(image => image.id === imageId); if (!image || !['error', 'interrupted'].includes(image.status)) return fail(); image.status = 'pending'; image.message = null; });
 }
 export async function removeDraftSource(database: LibraryDatabase, id: string, imageId: string): Promise<void> {
-  await database.transaction('rw', database.recognitionDrafts, database.images, database.books, database.shelves, async () => {
+  await database.transaction('rw', database.recognitionDrafts, database.images, database.books, database.copies, database.shelves, async () => {
     let sourceId: string | null = null;
     await mutate(database, id, draft => { if (draft.status === 'running') return fail('השהה את התור לפני מחיקת מקור.'); const image = draft.images.find(image => image.id === imageId); if (!image) return fail(); sourceId = image.storedImageId; image.storedImageId = null; });
-    if (sourceId && !await database.recognitionDrafts.filter(draft => draft.images.some(image => image.storedImageId === sourceId)).count() && !await database.books.filter(book => book.primaryImageId === sourceId).count() && !await database.shelves.filter(shelf => shelf.imageId === sourceId).count()) await database.images.delete(sourceId);
+    if (sourceId && !await database.copies.filter(copy => copy.handyLibrary?.iconImageId === sourceId || copy.handyLibrary?.photoImageId === sourceId).count() && !await database.recognitionDrafts.filter(draft => draft.images.some(image => image.storedImageId === sourceId)).count() && !await database.books.filter(book => book.primaryImageId === sourceId).count() && !await database.shelves.filter(shelf => shelf.imageId === sourceId).count()) await database.images.delete(sourceId);
   });
 }
 export function overlapSuggestions(draft: RecognitionDraft): { firstId: string; secondId: string; reason: string }[] {

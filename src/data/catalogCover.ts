@@ -1,11 +1,13 @@
 import { comparableISBN, parseISBN } from './books';
 import { prepareImage } from './images';
 import { safeCatalogCoverUrl } from './catalogCoverUrl';
+import { catalogServiceCover, goodreadsEndpoint } from './goodreads';
 
 export async function downloadCatalogCover(url: string, signal: AbortSignal, fetcher: typeof fetch = fetch, prepare = prepareImage) {
   if (!safeCatalogCoverUrl(url)) throw new Error('כתובת הכריכה אינה מאושרת.');
-  const response = await fetcher(url, { signal, credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'follow' });
-  if (response.url && !safeCatalogCoverUrl(response.url) && !safeCoverRedirect(response.url)) { await response.body?.cancel(); throw new Error('יעד הכריכה אינו מאושר.'); }
+  const proxied = new URL(url).hostname === 'infocenters.co.il';
+  const response = proxied ? await catalogServiceCover(url, signal, fetcher) : await fetcher(url, { signal, credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'follow' });
+  if (response.url && !(proxied && response.url === goodreadsEndpoint + '/v1/icl-cover') && !safeCatalogCoverUrl(response.url) && !safeCoverRedirect(response.url)) { await response.body?.cancel(); throw new Error('יעד הכריכה אינו מאושר.'); }
   const type = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
   if (!response.ok || !response.body || !type || !['image/jpeg', 'image/png', 'image/webp'].includes(type)) { await response.body?.cancel(); throw new Error('הכריכה אינה זמינה כתמונה תקינה.'); }
   const limit = 4 * 1024 * 1024;

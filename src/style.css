@@ -76,3 +76,12 @@ button,input,select,textarea{font:inherit}select{border:1px solid #71878c;border
 .shelf-inline-books .book-list > li { margin: 0; }
 .shelf-inline-books .book-jacket .book-cover, .shelf-inline-books .book-jacket .book-placeholder { width: 100%; height: 100%; }
 .shelf-inline-books .book-row { padding: 0; }
+
+/* Keep the close control outside the iOS modal's scrolling surface. */
+.sheet[open] { display: flex; flex-direction: column; overflow: hidden; max-height: 90dvh; }
+.sheet-heading { flex: 0 0 auto; }
+.sheet-content { min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
+.publication-date input { width: 60%; min-width: 0; }
+@media (max-width: 700px) {
+  .sheet[open] { height: 100dvh; max-height: 100dvh; padding-top: max(20px, env(safe-area-inset-top)); padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+}

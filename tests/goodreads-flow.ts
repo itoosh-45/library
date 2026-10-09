@@ -3,7 +3,7 @@ const endpoint = 'https://maya-n8n.duckdns.org/library-catalog';
 const key = 'a'.repeat(64);
 async function enable(page: Page) {
   await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
-  await page.getByText('קטלוגים · דני ספרים, הספרייה הלאומית ו־Goodreads', { exact: true }).click();
+  await page.getByText('קטלוגים · הקטלוג הישראלי, דני ספרים, הספרייה הלאומית ו־Goodreads', { exact: true }).click();
   await page.getByLabel('מפתח שירות הקטלוג הפרטי', { exact: true }).fill(key);
   await page.getByRole('button', { name: 'שמירת מפתח שירות הקטלוג', exact: true }).click();
   await expect(page.getByText('שירות הקטלוג הפרטי מוגדר במכשיר הזה.', { exact: true })).toBeVisible();
@@ -19,6 +19,7 @@ export function goodreadsTests() {
     await page.route('https://openlibrary.org/**', route => route.fulfill({ json: { docs: [] } }));
     let details = 0;
     await page.route(endpoint + '/**', route => {
+    if (route.request().url().endsWith('/icl-search')) return route.fulfill({json:{provider:'icl',results:[],cached:true}});
       expect(route.request().headers().authorization).toBe('Bearer ' + key);
       if (route.request().url().endsWith('/nli-search')) return route.fulfill({ json: { provider: 'nli', results: [], cached: true } });
       const source = { provider: 'goodreads', recordId: '123', sourceUrl: 'https://www.goodreads.com/book/show/123', fetchedAt: '2026-10-07T00:00:00.000Z', cached: true };
@@ -82,7 +83,7 @@ export function goodreadsTests() {
     await expect(page.getByText('Goodreads חוסם כרגע את שליפת המידע. אפשר לנסות ISBN במקום שם, או לבחור מקור אחר.', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'בחירת מועמד ספר ממקור אחר', exact: true })).toBeVisible(); await expect(page.locator('input[type="url"]')).toHaveCount(0);
     await page.getByRole('button', { name: 'סגירה', exact: true }).click(); await page.getByRole('link', { name: 'הגדרות', exact: true }).click();
-    await page.getByText('קטלוגים · דני ספרים, הספרייה הלאומית ו־Goodreads', { exact: true }).click(); await page.getByRole('button', { name: 'מחיקת מפתח שירות הקטלוג', exact: true }).click();
-    await page.reload(); await page.getByText('קטלוגים · דני ספרים, הספרייה הלאומית ו־Goodreads', { exact: true }).click(); await expect(page.getByLabel('מפתח שירות הקטלוג הפרטי', { exact: true })).toHaveValue('');
+    await page.getByText('קטלוגים · הקטלוג הישראלי, דני ספרים, הספרייה הלאומית ו־Goodreads', { exact: true }).click(); await page.getByRole('button', { name: 'מחיקת מפתח שירות הקטלוג', exact: true }).click();
+    await page.reload(); await page.getByText('קטלוגים · הקטלוג הישראלי, דני ספרים, הספרייה הלאומית ו־Goodreads', { exact: true }).click(); await expect(page.getByLabel('מפתח שירות הקטלוג הפרטי', { exact: true })).toHaveValue('');
   });
 }

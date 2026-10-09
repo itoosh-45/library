@@ -4,6 +4,9 @@ export function safeCatalogCoverUrl(value: unknown, provider?: string): value is
   try {
     const url = new URL(value);
     if (url.protocol !== 'https:' || url.username || url.password || url.port || url.hash) return false;
+    if (url.hostname === 'infocenters.co.il' && (!provider || provider === 'icl')) {
+      return !url.search && /^\/icl\/multimedia\/\d{4}\/\d{1,2}\/\d{1,2}\/[\w-]+f\.(?:jpg|jpeg|png)$/i.test(url.pathname);
+    }
     if (url.hostname === 'covers.openlibrary.org' && (!provider || provider === 'openlibrary')) {
       return /^\/b\/(?:id\/[1-9]\d{0,11}|isbn\/(?:\d{13}|\d{9}[\dX]))-[MSL]\.jpg$/.test(url.pathname) && url.search === '?default=false';
     }

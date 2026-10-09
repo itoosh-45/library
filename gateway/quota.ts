@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { isAbsolute } from 'node:path';
 
-export type ServerProvider = 'nli' | 'googlebooks' | 'goodreads' | 'danibooks';
+export type ServerProvider = 'nli' | 'googlebooks' | 'goodreads' | 'danibooks' | 'icl';
 export interface CatalogQuotaStore {
   /** Durably consume a slot before contacting the provider; zero admits, positive milliseconds reject. */
   reserve(provider: ServerProvider, now: number, dailyLimit: number): number;
@@ -17,7 +17,7 @@ export class SqliteCatalogQuota implements CatalogQuotaStore {
     try {
       this.database.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
         CREATE TABLE IF NOT EXISTS catalog_quota (
-          provider TEXT PRIMARY KEY CHECK(provider IN ('nli','googlebooks','goodreads','danibooks')),
+          provider TEXT PRIMARY KEY CHECK(provider IN ('nli','googlebooks','goodreads','danibooks','icl')),
           day TEXT NOT NULL, used INTEGER NOT NULL CHECK(used >= 0),
           next_at INTEGER NOT NULL CHECK(next_at >= 0)
         ) STRICT;`);
@@ -26,9 +26,9 @@ export class SqliteCatalogQuota implements CatalogQuotaStore {
       try {
         const schema = this.database.prepare("SELECT sql FROM sqlite_master WHERE name='catalog_quota'").get()?.sql;
         if (typeof schema !== 'string') throw new Error('Missing quota schema.');
-        if (!schema.includes("'danibooks'")) this.database.exec(`
+        if (!schema.includes("'icl'")) this.database.exec(`
           CREATE TABLE catalog_quota_expanded (
-            provider TEXT PRIMARY KEY CHECK(provider IN ('nli','googlebooks','goodreads','danibooks')),
+            provider TEXT PRIMARY KEY CHECK(provider IN ('nli','googlebooks','goodreads','danibooks','icl')),
             day TEXT NOT NULL, used INTEGER NOT NULL CHECK(used >= 0),
             next_at INTEGER NOT NULL CHECK(next_at >= 0)
           ) STRICT;

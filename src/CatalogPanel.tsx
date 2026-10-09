@@ -15,6 +15,7 @@ import { gatewayAdapter } from './data/catalogGateway';
 import { goodreadsAdapter, goodreadsConfigured } from './data/goodreads';
 import { nliCatalogAdapter } from './data/nliCatalog';
 import { danibooksAdapter, exactIdentifierMatch } from './data/danibooks';
+import { iclAdapter } from './data/icl';
 
 const fieldLabels: Record<MetadataField, string> = { title: 'שם הספר', subtitle: 'כותרת משנה', authors: 'מחברים', isbn10: 'ISBN-10', isbn13: 'ISBN-13', danacode: 'דאנאקוד', publisher: 'הוצאה לאור', publicationYear: 'שנת הוצאה', publicationDate: 'תאריך פרסום', binding: 'סוג כריכה', edition: 'מהדורה', volume: 'כרך', language: 'שפה', pages: 'מספר עמודים', seriesName: 'סדרה', seriesNumber: 'מספר בסדרה' };
 const openLibrary = openLibraryAdapter();
@@ -54,7 +55,7 @@ export function CatalogPanel({ input, disabled, onApply, autoOpen = false, autoS
   const [query, setQuery] = useState<CatalogQuery>(() => simple && searchBy === 'details' ? { ...emptyQuery, title: input.title, author: input.authors.filter(Boolean).join(' ') } : autoSearch ? { ...emptyQuery, ...(searchBy === 'identifier' && (input.isbn || input.danacode) ? { isbn: input.isbn, danacode: input.danacode } : { title: input.title, author: input.authors.filter(Boolean).join(' ') }) } : ({ ...emptyQuery, title: input.title, author: input.authors.filter(Boolean).join(' '), publisher: input.publisher, year: input.publicationYear, isbn: input.isbn, danacode: input.danacode }));
   const [results, setResults] = useState<ProviderResult[]>([]), [searching, setSearching] = useState(false), [error, setError] = useState('');
   const [resolving, setResolving] = useState(false), [appliedMessage, setAppliedMessage] = useState('');
-  const [adapter] = useState(() => openLibrary), [adapters] = useState(() => [openLibrary, ...serverAdapters.filter(source=>source.provider!=='nli'||!goodreadsConfigured()), danibooksAdapter(), ...(goodreadsConfigured() ? [nliCatalogAdapter(), goodreadsAdapter()] : [])]), [search] = useState(() => new CatalogSearch(db, adapters));
+  const [adapter] = useState(() => openLibrary), [adapters] = useState(() => [openLibrary, ...serverAdapters.filter(source=>source.provider!=='nli'||!goodreadsConfigured()), danibooksAdapter(), iclAdapter(), ...(goodreadsConfigured() ? [nliCatalogAdapter(), goodreadsAdapter()] : [])]), [search] = useState(() => new CatalogSearch(db, adapters));
   const request = useRef(0), resolveRequest = useRef<AbortController | undefined>(undefined);
   useEffect(() => { onBusy?.(searching || resolving); }, [onBusy, searching, resolving]);
   useEffect(() => () => { search.cancel(); resolveRequest.current?.abort(); request.current++; }, [search]);

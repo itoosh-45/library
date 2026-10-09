@@ -23,7 +23,7 @@ it('OCR groups spatial columns separately and selects title by relative font siz
 it('Gemini quota and server failures use Groq once; strict results survive backup with accurate provider and no key',async()=>{
   for(const status of [429,503]){
     const primary=vi.fn<typeof fetch>().mockResolvedValue(new Response('',{status}));
-    const fallback=vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify({items:[example()]})}}]})));
+    const fallback=vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{content:JSON.stringify({items:[{title:example().title,authors:example().authors}]})}}]})));
     const gemini=new VisionSession(primary),groq=new GroqVisionSession(fallback);gemini.configure('synthetic-gemini-key',true,true);groq.configure(key,true,true);const router=new VisionRouter(gemini,groq),notice=vi.fn();
     const outcome=await router.recognize(jpeg(),notice,'shelf');expect(primary).toHaveBeenCalledTimes(status === 503 ? 3 : 1);expect(fallback).toHaveBeenCalledOnce();expect(outcome.model).toBe(recognitionModels.groq);expect(notice).toHaveBeenCalledWith(expect.stringContaining('Groq'));
     expect(fallback.mock.calls[0][1]).toMatchObject({headers:{Authorization:'Bearer '+key},credentials:'omit',redirect:'error',cache:'no-store'});expect(fallback.mock.calls[0][1]?.body).not.toContain(key);
@@ -53,7 +53,7 @@ it('automatic photo catalog matching requires ISBN equivalence or exact title/au
 it('fallback preserves safe provider failure diagnostics while Groq succeeds; no credentials or raw response survive', async () => {
   for (const status of [400,401,403,429,503]) {
     const gemini = new VisionSession(async () => new Response(key, { status })); gemini.configure(key,true,true);
-    const groq = new GroqVisionSession(async () => Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({items:[example()]})}}]})); groq.configure(key,true,true);
+    const groq = new GroqVisionSession(async () => Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({title:example().title,authors:example().authors})}}]})); groq.configure(key,true,true);
     const report = vi.fn(), outcome = await new VisionRouter(gemini,groq).recognize(jpeg(),vi.fn(),'single',false,report);
     expect(outcome.model).toBe(recognitionModels.groq);
     expect(report).toHaveBeenCalledWith({provider:'Gemini',httpStatus:status,state:status===400?'invalid':[401,403].includes(status)?'key':status===429?'quota':'unavailable'});
@@ -63,7 +63,7 @@ it('fallback preserves safe provider failure diagnostics while Groq succeeds; no
 
 it('a configured but quota-stopped Gemini explains its hold without another request; network failure is distinguished', async () => {
   const fetcher = vi.fn<typeof fetch>(), gemini = new VisionSession(fetcher); gemini.configure(key,true,true); gemini.stopForQuota();
-  const groq = new GroqVisionSession(async () => Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({items:[example()]})}}]})); groq.configure(key,true,true);
+  const groq = new GroqVisionSession(async () => Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({title:example().title,authors:example().authors})}}]})); groq.configure(key,true,true);
   const report=vi.fn(); await new VisionRouter(gemini,groq).recognize(jpeg(),vi.fn(),'single',false,report);
   expect(fetcher).not.toHaveBeenCalled(); expect(report).toHaveBeenCalledWith({provider:'Gemini',state:'quota'});
   const network = new VisionSession(async () => { throw new TypeError('untrusted '+key); }); network.configure(key,true,true);

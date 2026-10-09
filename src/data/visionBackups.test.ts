@@ -35,6 +35,6 @@ it('exhausted malformed responses retain a safe diagnostic and model while priva
 
 it('the router retains a specific safe reason and model when all Gemini responses fail and Groq succeeds',async()=>{
  const gemini=new VisionSession(async()=>Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({items:[{...item,title:'PRIVATE-UNTRUSTED-TITLE'}]})}]}}]}));gemini.configure('SYNTHETIC-NEVER-LIVE-KEY',true,true);
- const groq=new GroqVisionSession(async()=>Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({items:[item]})}}]}));groq.configure('SYNTHETIC-NEVER-LIVE-KEY',true,true);
+ const groq=new GroqVisionSession(async()=>Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({title:item.title,authors:item.authors})}}]}));groq.configure('SYNTHETIC-NEVER-LIVE-KEY',true,true);
  const report=vi.fn();const outcome=await new VisionRouter(gemini,groq).recognize(jpeg(),vi.fn(),'single',false,report);expect(outcome.model).toBe(visionModels.groq);expect(report).toHaveBeenCalledWith({provider:'Gemini',state:'invalid',diagnostic:'validation',model:visionModels.backup2});const notice=visionFailureMessage(report.mock.calls[0][0]);expect(notice).toContain(visionModels.backup2);expect(notice).toContain('ראיות');expect(notice).not.toContain('PRIVATE-UNTRUSTED');expect(notice).not.toContain('SYNTHETIC-NEVER-LIVE-KEY');
 });

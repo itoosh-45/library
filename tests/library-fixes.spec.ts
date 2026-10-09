@@ -1,5 +1,34 @@
 import { test, expect, type Page } from '@playwright/test';
 
+test('expanded add-book sections scroll inside the sheet while close stays reachable and the document restores', async ({ page }) => {
+  for (const width of [390, 1000]) {
+    await page.setViewportSize({ width, height: 600 });
+    await page.goto('');
+    const add = page.getByRole('button', { name: 'הוספת ספר', exact: true });
+    await expect(add).toBeVisible();
+    await page.evaluate(() => { document.body.style.minHeight = '1800px'; window.scrollTo(0, 250); });
+    await add.scrollIntoViewIfNeeded();
+    const before = await page.evaluate(() => window.scrollY);
+    await add.click();
+    const dialog = page.getByRole('dialog', { name: 'הוספת ספר', exact: true });
+    await expect(dialog).toBeVisible();
+    const ratio = await page.getByLabel('תאריך פרסום', { exact: true }).evaluate(input => input.getBoundingClientRect().width / input.parentElement!.getBoundingClientRect().width);
+    expect(ratio).toBeCloseTo(0.6, 2);
+    await dialog.locator('summary').filter({ hasText: 'פרטים נוספים' }).click();
+    await dialog.locator('.sheet-content').evaluate(element => { element.scrollTop = element.scrollHeight; });
+    await expect(dialog.getByRole('button', { name: 'סגירה', exact: true })).toBeInViewport();
+    expect(await page.evaluate(() => document.body.style.position)).toBe('fixed');
+    await page.mouse.move(width / 2, 550); await page.mouse.wheel(0, 800);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    await dialog.locator('.sheet-content').evaluate(element => { element.scrollTop = 0; });
+    await expect(page.getByLabel('שם הספר', { exact: true })).toBeInViewport();
+    await dialog.getByRole('button', { name: 'סגירה', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(await page.evaluate(() => document.body.style.position)).toBe('');
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(before);
+  }
+});
+
 test('reference navigation and split author details survive reload on a narrow phone', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto('');

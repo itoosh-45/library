@@ -29,7 +29,7 @@ test('Groq key is remembered separately and Gemini failures use mocked Groq auto
   const calls:string[]=[];await page.route('https://openlibrary.org/**',route=>route.fulfill({json:{docs:[{key:'/works/OL77W',title:'ספר גיבוי Groq',cover_i:77}]}}));
   const item={title:'ספר גיבוי Groq',authors:[],isbn:null,danacode:null,publisher:null,visibleText:'ספר גיבוי Groq',evidenceByField:{title:['ספר גיבוי Groq'],authors:[],isbn:[],danacode:[],publisher:[]},imageIndex:0,bbox:[0,0,1,1],uncertaintyReasons:[]};
   await page.route('https://generativelanguage.googleapis.com/**',route=>{calls.push('gemini');return route.fulfill({status:429,body:''});});
-  await page.route('https://api.groq.com/**',route=>{calls.push('groq');expect(route.request().headers().authorization).toBe('Bearer SYNTHETIC-GROQ-KEY-NEVER-LIVE');return route.fulfill({json:{choices:[{finish_reason:'stop',message:{content:JSON.stringify({title_lines:[item.title],authors:item.authors})}}]}});});
+  await page.route('https://api.groq.com/**',route=>{calls.push('groq');expect(route.request().headers().authorization).toBe('Bearer SYNTHETIC-GROQ-KEY-NEVER-LIVE');return route.fulfill({json:{choices:[{finish_reason:'stop',message:{content:JSON.stringify({title:item.title,authors:item.authors})}}]}});});
   await page.goto('#settings');await page.getByText('זיהוי ספר מתמונה · Gemini',{exact:true}).click();
   await page.getByLabel('מפתח Gemini אישי',{exact:true}).fill('SYNTHETIC-GEMINI-KEY-NEVER-LIVE');
   await page.getByLabel('בדקתי שהפרויקט של המפתח הוא Free, ללא חיוב פעיל',{exact:true}).check();await page.getByLabel('אני מסכים לשליחת התמונה המוכנה ל־Google Gemini',{exact:true}).check();await page.getByRole('button',{name:'שמירת מפתח Gemini',exact:true}).click();

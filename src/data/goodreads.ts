@@ -7,6 +7,15 @@ let token = '';
 let serviceQueue:Promise<void> = Promise.resolve();
 const stoppedUntil = new Map<string, number>();
 export const goodreadsConfigured = () => !!token;
+export function catalogServiceCover(url: string, signal: AbortSignal, fetcher: typeof fetch = fetch): Promise<Response> {
+  const result = serviceQueue.then(() => {
+    if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
+    if (!token) throw new CatalogError('unavailable', 'הגדר את מפתח שירות הקטלוג הפרטי בהגדרות.');
+    return fetcher(goodreadsEndpoint + '/v1/icl-cover', { method: 'POST', signal, credentials: 'omit', redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ url }) });
+  });
+  serviceQueue = result.then(() => undefined, () => undefined);
+  return result;
+}
 function normalizeKey(value: string) {
   value = value.trim().toLowerCase();
   if (!/^[a-f0-9]{64}$/.test(value)) throw new Error('מפתח שירות הקטלוג הפרטי אינו תקין.');

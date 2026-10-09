@@ -1,0 +1,1 @@
+import{t as e}from"./import-wrapper-prod-Jk7vZDHb.js";var t=new class extends e{credentials;constructor(){super(`itoosh-45.library.credentials.v1`),this.version(1).stores({credentials:`id`})}};export{t};

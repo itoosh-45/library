@@ -1,3 +1,4 @@
+import { validateHandyOriginal } from './handyOriginal';
 import type { LibraryDatabase } from './database';
 import type { Author, Book, BookShelf, Copy, Loan, MetadataSource, NamedItem, Person, RecognitionDraft, Series, Setting, Shelf, StoredImage } from './models';
 import { LibraryValidationError, normalizeText } from './library';
@@ -11,7 +12,7 @@ import { fullEnvelope, legacyEnvelope, MAX_BACKUP_BYTES, hasExtendedBookDetails,
 export interface Core { books: Book[]; copies: Copy[]; authors: Author[]; settings: Setting[]; images: StoredImage[]; shelves: Shelf[]; bookShelves: BookShelf[]; series: Series[]; genres: NamedItem[]; tags: NamedItem[]; people: Person[]; loans: Loan[]; metadataSources: MetadataSource[]; recognitionDrafts: RecognitionDraft[] }
 type ImageJSON = Omit<StoredImage, 'blob'> & { base64: string };
 type Payload = Omit<Core, 'images'> & { images: ImageJSON[] };
-interface Backup { format: 'personal-library-basic'; version: 7 | 8 | 9; schemaVersion: 2; appVersion: string; libraryId: string; exportedAt: string; counts: Record<keyof Core, number>; checksum: string; data: Payload }
+interface Backup { format: 'personal-library-basic'; version: 7 | 8 | 9 | 10; schemaVersion: 2; appVersion: string; libraryId: string; exportedAt: string; counts: Record<keyof Core, number>; checksum: string; data: Payload }
 export interface Snapshot { text: string; fingerprint: string; counts: Backup['counts'] }
 export interface ValidatedBackup { data: Core; counts: Backup['counts']; libraryName: string }
 export const coreKeys = ['books', 'copies', 'authors', 'settings', 'images', 'shelves', 'bookShelves', 'series', 'genres', 'tags', 'people', 'loans', 'metadataSources', 'recognitionDrafts'] as const;
@@ -52,7 +53,7 @@ export async function envelope(core: Core): Promise<Backup> {
   if (estimated > MAX_BACKUP_BYTES) return bad('הגיבוי גדול מדי (עד 150 מגה־בייט). אין שינוי בספרייה.');
   const { images, ...tables } = core;
   const data: Payload = { ...tables, images: await Promise.all(images.map(async ({ blob, ...image }) => ({ ...image, base64: encode(new Uint8Array(await blob.arrayBuffer())) }))) };
-  return { format: 'personal-library-basic', version: hasGoodreadsData(core) ? 9 : hasExtendedBookDetails(core) ? 8 : 7, schemaVersion: 2, appVersion: '0.25.7', libraryId: core.settings.find(setting => setting.key === 'libraryId')!.value, exportedAt: new Date().toISOString(), counts: countsOf(core), checksum: await hashBytes(new TextEncoder().encode(JSON.stringify(data)).buffer), data };
+  return { format: 'personal-library-basic', version: core.copies.some(copy => copy.handyLibrary) ? 10 : hasGoodreadsData(core) ? 9 : hasExtendedBookDetails(core) ? 8 : 7, schemaVersion: 2, appVersion: '0.25.8', libraryId: core.settings.find(setting => setting.key === 'libraryId')!.value, exportedAt: new Date().toISOString(), counts: countsOf(core), checksum: await hashBytes(new TextEncoder().encode(JSON.stringify(data)).buffer), data };
 }
 export async function createSnapshot(database: LibraryDatabase, full = false): Promise<Snapshot> {
   const core = await database.transaction('r', database.tables, () => readCore(database));
@@ -71,7 +72,7 @@ export async function validateBackup(source: string): Promise<ValidatedBackup> {
   const version2 = root.version === 2 && root.schemaVersion === 2;
   const version3 = root.version === 3 && root.schemaVersion === 2;
   const version5 = [4, 5].includes(root.version as number) && root.schemaVersion === 2;
-  if (root.format !== 'personal-library-basic' || (!legacy && !version2 && !version3 && !version5 && (![6, 7, 8, 9].includes(root.version as number) || root.schemaVersion !== 2))) return bad('פורמט או גרסת הגיבוי אינם נתמכים. הספרייה לא שונתה.');
+  if (root.format !== 'personal-library-basic' || (!legacy && !version2 && !version3 && !version5 && (![6, 7, 8, 9, 10].includes(root.version as number) || root.schemaVersion !== 2))) return bad('פורמט או גרסת הגיבוי אינם נתמכים. הספרייה לא שונתה.');
   if (!text(root.appVersion, 100) || !uuid(root.libraryId) || !date(root.exportedAt) || !text(root.checksum, 64)) return bad();
   const keys = legacy ? legacyKeys : version2 ? version2Keys : version3 ? version3Keys : version5 ? version5Keys : [...coreKeys];
   const data = exact(root.data, keys);
@@ -143,7 +144,8 @@ export async function validateBackup(source: string): Promise<ValidatedBackup> {
     if (book.isbn13 && parseISBN(book.isbn13).isbn13 !== book.isbn13) return bad();
   }
   for (const copy of payload.copies) {
-    exact(copy, ['id', 'bookId', 'label', 'purchasePriceMinor', 'currency', 'notes', 'archivedAt', 'createdAt', 'updatedAt']);
+    exact(copy, ['id', 'bookId', 'label', 'purchasePriceMinor', 'currency', 'notes', 'archivedAt', 'createdAt', 'updatedAt', ...(Object.hasOwn(copy, 'handyLibrary') ? ['handyLibrary'] : [])]);
+    if (copy.handyLibrary !== undefined) { if (root.version !== 10) return bad(); validateHandyOriginal(copy.handyLibrary, imageIds); }
     if (!bookIds.has(copy.bookId) || !nullable(copy.label) || !nullable(copy.notes) || !nullable(copy.currency) || (copy.purchasePriceMinor !== null && !integer(copy.purchasePriceMinor, 0, 100000000)) || (copy.archivedAt !== null && !date(copy.archivedAt)) || !date(copy.createdAt) || !date(copy.updatedAt)) return bad();
   }
   for (const person of payload.people) {
@@ -224,7 +226,7 @@ export async function deleteBook(database: LibraryDatabase, id: string, expected
       draft.revision++; draft.updatedAt = new Date().toISOString();
     });
     const others = await database.books.toArray();
-    if (book.primaryImageId && !others.some(other => other.primaryImageId === book.primaryImageId) && !await database.shelves.filter(shelf => shelf.imageId === book.primaryImageId).count() && !await database.recognitionDrafts.filter(draft => draft.images.some(image => image.storedImageId === book.primaryImageId)).count()) await database.images.delete(book.primaryImageId);
+    if (book.primaryImageId && !await database.copies.filter(copy => copy.handyLibrary?.iconImageId === book.primaryImageId || copy.handyLibrary?.photoImageId === book.primaryImageId).count() && !others.some(other => other.primaryImageId === book.primaryImageId) && !await database.shelves.filter(shelf => shelf.imageId === book.primaryImageId).count() && !await database.recognitionDrafts.filter(draft => draft.images.some(image => image.storedImageId === book.primaryImageId)).count()) await database.images.delete(book.primaryImageId);
     for (const authorId of book.authorIds) if (!others.some(other => other.authorIds.includes(authorId))) await database.authors.delete(authorId);
   });
 }

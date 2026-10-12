@@ -1,5 +1,5 @@
 import type { LibraryDatabase } from './database';
-import type { DraftItem, DraftReview, MetadataSource, RecognitionDraft } from './models';
+import type { DraftItem, DraftReview, MetadataSource, RecognitionDraft, StoredImage } from './models';
 import { validateDraft } from './shelfDraft';
 import { validateReview } from './draftReviewValues';
 import { LibraryValidationError } from './library';
@@ -60,7 +60,7 @@ function imageSource(draft: RecognitionDraft, item: DraftItem, bookId: string, a
   const source: MetadataSource = { id: crypto.randomUUID(), bookId, provider: item.model === recognitionModels.groq ? 'groq' : item.model === recognitionModels.ocr ? 'ocr' : 'gemini', recordId: `${item.model}/${shelfRecognitionVersion}/${imageHash}/${item.id}`, sourceUrl: null, fetchedAt: item.fetchedAt, fieldValues: fields, selectedFields: selected, userOverriddenFields: selected.filter(field => JSON.stringify(inputFieldValue(item.review!.input, field)) !== JSON.stringify(fields[field])), recognition: { version: shelfRecognitionVersion, model: item.model, imageHash, item: item.item, batchId: draft.batchId, itemId: item.id } };
   return validateMetadataSource(source);
 }
-export async function saveApproved(database: LibraryDatabase, preview: ApprovedPreview): Promise<{ saved: number; bookIds: string[]; copyIds: string[] }> {
+export async function saveApproved(database: LibraryDatabase, preview: ApprovedPreview, covers: Map<string, StoredImage> = new Map()): Promise<{ saved: number; bookIds: string[]; copyIds: string[] }> {
   if (!Array.isArray(preview.itemIds) || new Set(preview.itemIds).size !== preview.itemIds.length) return fail('רשימת האישור אינה תקינה.');
   return database.transaction('rw', database.tables, async () => {
     const raw = await database.recognitionDrafts.get(preview.draftId); if (!raw) return fail('הטיוטה אינה קיימת.');
@@ -80,7 +80,7 @@ export async function saveApproved(database: LibraryDatabase, preview: ApprovedP
         if (draft.shelfId && !await database.bookShelves.where('[bookId+shelfId]').equals([bookId, draft.shelfId]).count()) await database.bookShelves.add({ id: crypto.randomUUID(), bookId, shelfId: draft.shelfId });
       } else {
         const input = { ...review.input, shelfIds: [...new Set([...(review.input.shelfIds ?? []), ...(draft.shelfId ? [draft.shelfId] : [])])] };
-        const book = await saveBookSelections(database, input, review.catalogs, [], undefined, undefined, review.allowDuplicate);
+        const book = await saveBookSelections(database, input, review.catalogs, [], undefined, covers.get(item.id), review.allowDuplicate);
         bookId = book.id; const copies = await database.copies.where('bookId').equals(book.id).toArray(); if (copies.length !== 1) return fail('שמירת העותק לא הושלמה.'); copyId = copies[0].id;
       }
       await database.metadataSources.add(imageSource(draft, item, bookId, review.decision === 'new'));

@@ -5,8 +5,10 @@ import { SqliteCatalogQuota } from '../quota.ts';
 import { bookId, queryText, parseBook, parseSearch, GoodreadsError } from './model.mjs';
 import { danaDigits, daniId, daniUrl, parseDaniBook } from './danibooks.mjs';
 import { createIclCatalog, iclId, iclCoverUrl } from './icl.mjs';
+import { createBatchQueue } from './batch.mjs';
+import { batchCatalog } from './batch-catalog.mjs';
 
-export function createGoodreadsService({ token, origins, path, dailyLimit = 200, fetcher = fetch, now = Date.now, nliAdapter }) {
+export function createGoodreadsService({ token, origins, path, dailyLimit = 200, fetcher = fetch, now = Date.now, nliAdapter, batchPath }) {
   if (!/^[a-f0-9]{64}$/.test(token) || !Array.isArray(origins) || !origins.length || !Number.isInteger(dailyLimit) || dailyLimit < 1 || dailyLimit > 1000) throw new Error('Invalid service configuration');
   const quota = new SqliteCatalogQuota(path);
   const cache = new DatabaseSync(path);
@@ -14,7 +16,8 @@ export function createGoodreadsService({ token, origins, path, dailyLimit = 200,
   cache.exec('CREATE TABLE IF NOT EXISTS goodreads_status (key TEXT PRIMARY KEY, blocked_until INTEGER NOT NULL) STRICT');
   const allowed = new Set(origins), secret = Buffer.from(token);
   const icl = createIclCatalog(fetcher);
-  let active = false, windowAt = now(), requests = 0;
+  const batches = batchPath ? createBatchQueue({path:batchPath,token,fetcher,catalogSearch:batchCatalog(token,fetcher),now}) : undefined;
+  let active = false, windowAt = now(), requests = 0, batchRequests = 0;
   async function upstream(url, parse, signal) {
     const provider = new URL(url).hostname === 'www.danibooks.co.il' ? 'danibooks' : 'goodreads';
     const daniSearch = provider === 'danibooks' && new URL(url).pathname === '/search/';
@@ -63,17 +66,20 @@ export function createGoodreadsService({ token, origins, path, dailyLimit = 200,
     res.setHeader('Cache-Control', 'no-store'); res.setHeader('X-Content-Type-Options', 'nosniff');
     const send = (status, value) => { if (!res.destroyed) { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); } };
     if (req.method === 'GET' && req.url === '/health') return send(200, { state: 'ok', provider: 'goodreads' });
-    if (now() - windowAt >= 60000) { windowAt = now(); requests = 0; }
-    if (++requests > 30) { res.setHeader('Retry-After', '60'); return send(429, { state: 'rate-limited' }); }
+    if (now() - windowAt >= 60000) { windowAt = now(); requests = 0; batchRequests = 0; }
+    const batchRequest = req.url?.startsWith('/v1/batch/');
     const origin = req.headers.origin;
     if (origin && !allowed.has(origin)) return send(403, { state: 'denied' });
     if (origin) { res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Vary', 'Origin'); res.setHeader('Access-Control-Expose-Headers', 'Retry-After'); }
-    if (!['/v1/book', '/v1/search', '/v1/danacode', '/v1/danibook', '/v1/nli-search', '/v1/icl-search', '/v1/icl-book', '/v1/icl-cover'].includes(req.url)) return send(404, { state: 'not-found' });
-    if (req.method === 'OPTIONS' && origin) { res.setHeader('Access-Control-Allow-Methods', 'POST'); res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type'); return send(204, {}); }
+    if (req.method !== 'OPTIONS' && (batchRequest ? ++batchRequests > 120 : ++requests > 30)) { res.setHeader('Retry-After', '60'); return send(429, { state: 'rate-limited' }); }
+    const batchRoute = batches && ['/v1/batch/create','/v1/batch/upload','/v1/batch/status','/v1/batch/action'].includes(req.url);
+    if (!batchRoute && !['/v1/book', '/v1/search', '/v1/danacode', '/v1/danibook', '/v1/nli-search', '/v1/icl-search', '/v1/icl-book', '/v1/icl-cover'].includes(req.url)) return send(404, { state: 'not-found' });
+    if (req.method === 'OPTIONS' && origin) { res.setHeader('Access-Control-Allow-Methods', 'POST'); res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Batch-Token'); return send(204, {}); }
     const supplied = Buffer.from(req.headers.authorization?.replace(/^Bearer /, '') ?? '');
     if (supplied.length !== secret.length || !timingSafeEqual(supplied, secret)) return send(401, { state: 'unauthorized' });
     if (req.method !== 'POST') return send(405, { state: 'method-not-allowed' });
     if (req.headers['content-type'] !== 'application/json') return send(415, { state: 'invalid-request' });
+    if (batchRoute) return batches.handle(req,res);
     if (Number(req.headers['content-length']) > 1024) return send(413, { state: 'too-large' });
     let key, url, parse, nliQuery, iclQuery, iclBook, iclCover;
     try {
@@ -139,7 +145,7 @@ export function createGoodreadsService({ token, origins, path, dailyLimit = 200,
       else send(503, { state: 'unavailable', message: 'שליפת המידע אינה זמינה כרגע.' });
     }
   });
-  server.requestTimeout = 10000; server.headersTimeout = 5000; server.keepAliveTimeout = 2000; server.maxHeadersCount = 20; server.maxConnections = 32;
-  server.on('close', () => { cache.close(); quota.close(); });
+  server.requestTimeout = 60000; server.headersTimeout = 5000; server.keepAliveTimeout = 2000; server.maxHeadersCount = 20; server.maxConnections = 32;
+  server.on('close', () => { batches?.close(); cache.close(); quota.close(); });
   return server;
 }

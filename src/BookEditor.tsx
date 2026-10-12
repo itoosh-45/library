@@ -23,6 +23,8 @@ import { createFullSnapshot } from './data/fullBackup';
 export { Sheet } from './Sheet';
 const BarcodeScanner = lazy(() => import('./BarcodeScanner'));
 const SingleBookVision = lazy(() => import('./SingleBookVision'));
+const BookBatch = lazy(() => import('./BookBatch'));
+
 const overlapsSource = (field: MetadataField, selected: MetadataField[]) => selected.includes(field) || (field.startsWith('isbn') && selected.some(next => next.startsWith('isbn')));
 const remainingRecognition = (selection: RecognitionSelection, fields: MetadataField[]) => ({ ...selection, selected: selection.selected.filter(field => !recognitionMetadataFields(selection.item, [field]).some(metadata => overlapsSource(metadata, fields))) });
 
@@ -70,6 +72,7 @@ export function BookEditor({ book, authorNames, authorRecords, onClose, onOpen, 
   const [recognitionSelections, setRecognitionSelections] = useState<RecognitionSelection[]>([]), [vision, setVision] = useState(startWith === 'vision');
   const [scanner, setScanner] = useState(startWith === 'barcode'), [barcodeRevision, setBarcodeRevision] = useState(0);
   const [catalogBusy, setCatalogBusy] = useState(false);
+  const [batch, setBatch] = useState(false);
   const coverRequest=useRef<AbortController|undefined>(undefined);
   const [coverMessage,setCoverMessage]=useState('');
   useEffect(()=>()=>coverRequest.current?.abort(),[]);
@@ -123,12 +126,13 @@ export function BookEditor({ book, authorNames, authorRecords, onClose, onOpen, 
   return <Sheet title={book ? 'עריכת ספר' : 'הוספת ספר'} onClose={onClose} busy={busy || catalogBusy} dirty={dirty}><div className={simple ? 'simple-book-editor' : undefined}>
     <StarRating value={input.rating ?? null} disabled={busy || catalogBusy} onChange={rating => { setInput({ ...input, rating }); setDirty(true); }} />
     {dirtyCopyId && <p className="notice">יש שינוי בעותק. שמור את העותק לפני שמירה נוספת של הספר.</p>}
-    <div className="actions"><button type="button" className="secondary" disabled={busy || catalogBusy || !!dirtyCopyId} onClick={() => setVision(true)}>סריקת תמונה</button><button type="button" className="secondary" disabled={busy || catalogBusy || !!dirtyCopyId} onClick={() => setScanner(true)}>סריקת ברקוד</button><button type="button" className="secondary" disabled={busy || catalogBusy || !!dirtyCopyId} onClick={() => { setCatalogAutoSearch(false); setCatalogSearchKind('details'); setCatalogOpen(true); setBarcodeRevision(old => old + 1); }}>חיפוש</button></div>
+    <div className="actions"><button type="button" className="secondary" disabled={busy || catalogBusy || !!dirtyCopyId} onClick={() => setVision(true)}>סריקת תמונה</button><button type="button" className="secondary" disabled={busy || catalogBusy || !!dirtyCopyId} onClick={() => setScanner(true)}>סריקת ברקוד</button><button type="button" className="secondary" disabled={busy || catalogBusy || !!dirtyCopyId} onClick={() => { setCatalogAutoSearch(false); setCatalogSearchKind('details'); setCatalogOpen(true); setBarcodeRevision(old => old + 1); }}>חיפוש</button><button type="button" className="secondary" disabled={busy || catalogBusy || !!dirtyCopyId} onClick={() => setBatch(true)}>תמונות רבות</button></div>
+    {batch && <Suspense fallback={<p role="status">טוען תור תמונות…</p>}><BookBatch onClose={() => setBatch(false)} /></Suspense>}
     {scanner && <Suspense fallback={<p role="status">טוען סורק…</p>}><BarcodeScanner onClose={() => setScanner(false)} onApply={(kind, value) => { setInput(old => ({ ...old, isbn: kind === 'isbn' ? value : '', danacode: kind === 'danacode' ? value : '' })); setCatalogSearchKind('identifier'); setCatalogAutoSearch(true); setCatalogOpen(true); setDirty(true); setDuplicates([]); setBarcodeRevision(old => old + 1); setScanner(false); }} /></Suspense>}
     {vision && <Suspense fallback={<p role="status">טוען זיהוי תמונה…</p>}><SingleBookVision simple={simple} onClose={() => setVision(false)} onApply={applyRecognition} /></Suspense>}
-    <details className={simple ? 'simple-import' : undefined} open={!simple || catalogAutoSearch || catalogOpen || undefined}><summary hidden={!simple}>חיפוש והשלמת פרטים</summary>
+    <div className={simple ? 'simple-import' : undefined}>
     <CatalogPanel simple={simple} key={barcodeRevision} autoOpen={catalogOpen || catalogAutoSearch} autoSearch={catalogAutoSearch} searchBy={catalogSearchKind} fetchCover onBusy={setCatalogBusy} input={input} disabled={busy || catalogBusy || !!dirtyCopyId} onApply={(draft, candidate, selected, cover) => { setInput(draft); if (cover) setImage(cover); setDirty(true); setDuplicates([]); setRecognitionSelections(old => old.map(item => remainingRecognition(item, selected)).filter(item => item.selected.length)); setCatalogSelections(old => [...old.map(item => ({ ...item, selected: item.selected.filter(field => !overlapsSource(field, selected)) })).filter(item => item.selected.length), { candidate, selected }]); }} />
-    </details>{book && !simple && <Provenance bookId={book.id} />}
+    </div>{book && !simple && <Provenance bookId={book.id} />}
     <form onSubmit={event => void save(event)}><fieldset disabled={busy || catalogBusy || !!dirtyCopyId}>{!simple && <p className="hint">כל השדות לבחירה. אפשר לשמור ספר גם ללא שם ולמלא בהמשך.</p>}
       {field('title', 'שם הספר')}
       {simple && <SeriesFields input={input} onBusyChange={setBusy} onChange={value => { setInput(value); setDirty(true); }} />}

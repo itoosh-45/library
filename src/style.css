@@ -82,6 +82,16 @@ button,input,select,textarea{font:inherit}select{border:1px solid #71878c;border
 .sheet-heading { flex: 0 0 auto; }
 .sheet-content { min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
 .publication-date input { width: 60%; min-width: 0; }
+.batch-books { padding-inline-start: 24px; }
+.batch-books > li { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 16px; padding-block: 16px; border-bottom: 1px solid var(--border, #d6dfdc); }
+.batch-books .thumbnail, .batch-books .book-cover, .batch-books .book-placeholder { width: 70px; height: 105px; object-fit: contain; }
+.batch-books p { margin-block: 6px; }
+.batch-filters { margin-top: 24px; }
+.batch-filters [aria-pressed="true"] { background: #205c49; color: white; }
+.batch-save-actions { margin-block: 16px; }
+.batch-save-actions button { width: 100%; }
+.batch-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+.batch-comparison .book-cover, .batch-comparison .book-placeholder { width: 100px; max-width: 100%; height: 150px; object-fit: contain; }
 @media (max-width: 700px) {
   .sheet[open] { height: 100dvh; max-height: 100dvh; padding-top: max(20px, env(safe-area-inset-top)); padding-bottom: max(20px, env(safe-area-inset-bottom)); }
 }

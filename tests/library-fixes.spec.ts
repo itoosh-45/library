@@ -21,7 +21,7 @@ test('expanded add-book sections scroll inside the sheet while close stays reach
     await page.mouse.move(width / 2, 550); await page.mouse.wheel(0, 800);
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
     await dialog.locator('.sheet-content').evaluate(element => { element.scrollTop = 0; });
-    await expect(page.getByLabel('שם הספר', { exact: true })).toBeInViewport();
+    await expect(page.getByLabel('שם ספר, דאנאקוד או ISBN', { exact: true })).toBeInViewport();
     await dialog.getByRole('button', { name: 'סגירה', exact: true }).click();
     await expect(dialog).toHaveCount(0);
     expect(await page.evaluate(() => document.body.style.position)).toBe('');

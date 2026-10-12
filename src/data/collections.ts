@@ -39,11 +39,11 @@ export function shelfBookIds(shelves: Shelf[], links: BookShelf[], shelfId: stri
   return new Set(links.filter(link => selected.has(link.shelfId) && (!visibleIds || visibleIds.has(link.bookId))).map(link => link.bookId));
 }
 export async function removeUnusedImage(database: LibraryDatabase, id: string | null) {
-  if (id && !await database.books.filter(book => book.primaryImageId === id).count() && !await database.shelves.filter(shelf => shelf.imageId === id).count() && !await database.recognitionDrafts.filter(draft => draft.images.some(image => image.storedImageId === id)).count()) await database.images.delete(id);
+  if (id && !await database.copies.filter(copy => copy.handyLibrary?.iconImageId === id || copy.handyLibrary?.photoImageId === id).count() && !await database.books.filter(book => book.primaryImageId === id).count() && !await database.shelves.filter(shelf => shelf.imageId === id).count() && !await database.recognitionDrafts.filter(draft => draft.images.some(image => image.storedImageId === id)).count()) await database.images.delete(id);
 }
 export async function saveShelf(database: LibraryDatabase, input: { name: string; parentId: string | null }, existing?: Shelf, image?: StoredImage | null): Promise<Shelf> {
   const name = nameField(input.name);
-  return database.transaction('rw', [database.shelves, database.images, database.books, database.recognitionDrafts], async () => {
+  return database.transaction('rw', [database.shelves, database.images, database.books, database.copies, database.recognitionDrafts], async () => {
     const current = existing ? await database.shelves.get(existing.id) : undefined;
     if (existing) checkCurrent(current, existing);
     const shelves = await database.shelves.toArray();
@@ -58,7 +58,7 @@ export async function saveShelf(database: LibraryDatabase, input: { name: string
   });
 }
 export async function deleteShelf(database: LibraryDatabase, expected: Shelf): Promise<void> {
-  await database.transaction('rw', [database.shelves, database.bookShelves, database.books, database.images, database.recognitionDrafts], async () => {
+  await database.transaction('rw', [database.shelves, database.bookShelves, database.books, database.copies, database.images, database.recognitionDrafts], async () => {
     const shelf = await database.shelves.get(expected.id); checkCurrent(shelf, expected);
     const now = new Date().toISOString();
     await database.shelves.where('parentId').equals(expected.id).modify({ parentId: expected.parentId, updatedAt: now });

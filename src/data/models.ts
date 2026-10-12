@@ -9,7 +9,12 @@ export interface Book {
   rating?: number | null; readStatus: ReadStatus; personalNotes: string | null; primaryImageId: string | null;
   createdAt: string; updatedAt: string; revision: number; titleSortKey: string;
 }
+export interface HandyLibraryOriginal {
+  row: Record<string, string | number | null>; csv: Record<string, string>;
+  iconImageId: string | null; photoImageId: string | null;
+}
 export interface Copy {
+  handyLibrary?: HandyLibraryOriginal;
   id: string; bookId: string; label: string | null; purchasePriceMinor: number | null;
   currency: string | null; notes: string | null; archivedAt: string | null;
   createdAt: string; updatedAt: string;

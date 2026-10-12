@@ -39,7 +39,11 @@ async function mappedCore(source: Core, targetLibraryId: string): Promise<Core> 
     if (book.seriesId) book.seriesId = await id('series', book.seriesId);
     if (book.primaryImageId) book.primaryImageId = await id('images', book.primaryImageId);
   }
-  for (const copy of result.copies) copy.bookId = await id('books', copy.bookId);
+  for (const copy of result.copies) {
+    copy.bookId = await id('books', copy.bookId);
+    if (copy.handyLibrary?.iconImageId) copy.handyLibrary.iconImageId = await id('images', copy.handyLibrary.iconImageId);
+    if (copy.handyLibrary?.photoImageId) copy.handyLibrary.photoImageId = await id('images', copy.handyLibrary.photoImageId);
+  }
   for (const shelf of result.shelves) {
     if (shelf.parentId) shelf.parentId = await id('shelves', shelf.parentId);
     if (shelf.imageId) shelf.imageId = await id('images', shelf.imageId);

@@ -1,4 +1,4 @@
-# Book photos and visible catalog search — 0.25.8
+# Book photos and visible catalog search — 0.25.9
 
 The simple book editor now displays title/identifier and author search fields directly. Both nested search disclosures were removed; secondary book fields remain in their existing disclosure.
 
@@ -32,3 +32,7 @@ Public API creation, a body above the previous 1 KiB limit, upload and deletion 
 Five-axis review: correctness uses existing draft, duplicate and save validation; readability separates provider/queue logic, catalog enrichment and browser review; architecture extends the existing catalog service and persisted drafts without new dependencies; security combines consent, two credentials, encryption, fixed upstreams and bounded data; performance prepares and sends one image at a time and pages review rows.
 
 Physical iPhone behavior and recognition accuracy on actual book photos remain unverified. Uploads must finish while the application is open; processing continues independently afterwards. Provider or catalog availability can extend processing time, and a hard seven-day expiry ends an unfinished server queue while local uploaded sources remain.
+
+Release 0.25.9 also retains the Handy Library ZIP import/export changes from remote main. Merge review preserved original copy/image references and backup format 13. The new Handy unit fixture now converts its file URL with Node fileURLToPath so it works on both Windows and Linux. Integrated checks passed 249 unit cases (one optional private-fixture case skipped), 28 gateway cases and 8 release-integrity cases.
+
+All 23 integrated production PWA checks passed, including Handy ZIP import/export under CSP and offline, and the 101-photo review/save/resume flow.
